@@ -1,137 +1,278 @@
-// 
-// Decompiled by Procyon v0.5.29
-// 
+/*
+ * ====================================================================
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ * ====================================================================
+ *
+ * This software consists of voluntary contributions made by many
+ * individuals on behalf of the Apache Software Foundation.  For more
+ * information on the Apache Software Foundation, please see
+ * <http://www.apache.org/>.
+ *
+ */
 
 package com.newrelic.agent.deps.org.apache.http.conn.routing;
 
-import java.util.Iterator;
-import com.newrelic.agent.deps.org.apache.http.util.LangUtils;
-import java.net.InetSocketAddress;
-import java.util.Collections;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.ArrayList;
-import com.newrelic.agent.deps.org.apache.http.util.Args;
-import java.util.List;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
 import com.newrelic.agent.deps.org.apache.http.HttpHost;
 import com.newrelic.agent.deps.org.apache.http.annotation.Immutable;
+import com.newrelic.agent.deps.org.apache.http.util.Args;
+import com.newrelic.agent.deps.org.apache.http.util.LangUtils;
 
+/**
+ * The route for a request.
+ *
+ * @since 4.0
+ */
 @Immutable
-public final class HttpRoute implements RouteInfo, Cloneable
-{
+public final class HttpRoute implements RouteInfo, Cloneable {
+
+    /** The target host to connect to. */
     private final HttpHost targetHost;
+
+    /**
+     * The local address to connect from.
+     * <code>null</code> indicates that the default should be used.
+     */
     private final InetAddress localAddress;
+
+    /** The proxy servers, if any. Never null. */
     private final List<HttpHost> proxyChain;
+
+    /** Whether the the route is tunnelled through the proxy. */
     private final TunnelType tunnelled;
+
+    /** Whether the route is layered. */
     private final LayerType layered;
+
+    /** Whether the route is (supposed to be) secure. */
     private final boolean secure;
-    
-    private HttpRoute(final HttpHost target, final InetAddress local, final List<HttpHost> proxies, final boolean secure, final TunnelType tunnelled, final LayerType layered) {
+
+    private HttpRoute(final HttpHost target, final InetAddress local, final List<HttpHost> proxies,
+                      final boolean secure, final TunnelType tunnelled, final LayerType layered) {
         Args.notNull(target, "Target host");
-        this.targetHost = target;
+        this.targetHost   = target;
         this.localAddress = local;
         if (proxies != null && !proxies.isEmpty()) {
             this.proxyChain = new ArrayList<HttpHost>(proxies);
-        }
-        else {
+        } else {
             this.proxyChain = null;
         }
         if (tunnelled == TunnelType.TUNNELLED) {
             Args.check(this.proxyChain != null, "Proxy required if tunnelled");
         }
-        this.secure = secure;
-        this.tunnelled = ((tunnelled != null) ? tunnelled : TunnelType.PLAIN);
-        this.layered = ((layered != null) ? layered : LayerType.PLAIN);
+        this.secure       = secure;
+        this.tunnelled    = tunnelled != null ? tunnelled : TunnelType.PLAIN;
+        this.layered      = layered != null ? layered : LayerType.PLAIN;
     }
-    
-    public HttpRoute(final HttpHost target, final InetAddress local, final HttpHost[] proxies, final boolean secure, final TunnelType tunnelled, final LayerType layered) {
-        this(target, local, (proxies != null) ? Arrays.asList(proxies) : null, secure, tunnelled, layered);
+
+    /**
+     * Creates a new route with all attributes specified explicitly.
+     *
+     * @param target    the host to which to route
+     * @param local     the local address to route from, or
+     *                  <code>null</code> for the default
+     * @param proxies   the proxy chain to use, or
+     *                  <code>null</code> for a direct route
+     * @param secure    <code>true</code> if the route is (to be) secure,
+     *                  <code>false</code> otherwise
+     * @param tunnelled the tunnel type of this route
+     * @param layered   the layering type of this route
+     */
+    public HttpRoute(final HttpHost target, final InetAddress local, final HttpHost[] proxies,
+                     final boolean secure, final TunnelType tunnelled, final LayerType layered) {
+        this(target, local, proxies != null ? Arrays.asList(proxies) : null,
+                secure, tunnelled, layered);
     }
-    
-    public HttpRoute(final HttpHost target, final InetAddress local, final HttpHost proxy, final boolean secure, final TunnelType tunnelled, final LayerType layered) {
-        this(target, local, (proxy != null) ? Collections.singletonList(proxy) : null, secure, tunnelled, layered);
+
+    /**
+     * Creates a new route with at most one proxy.
+     *
+     * @param target    the host to which to route
+     * @param local     the local address to route from, or
+     *                  <code>null</code> for the default
+     * @param proxy     the proxy to use, or
+     *                  <code>null</code> for a direct route
+     * @param secure    <code>true</code> if the route is (to be) secure,
+     *                  <code>false</code> otherwise
+     * @param tunnelled <code>true</code> if the route is (to be) tunnelled
+     *                  via the proxy,
+     *                  <code>false</code> otherwise
+     * @param layered   <code>true</code> if the route includes a
+     *                  layered protocol,
+     *                  <code>false</code> otherwise
+     */
+    public HttpRoute(final HttpHost target, final InetAddress local, final HttpHost proxy,
+                     final boolean secure, final TunnelType tunnelled, final LayerType layered) {
+        this(target, local, proxy != null ? Collections.singletonList(proxy) : null,
+                secure, tunnelled, layered);
     }
-    
+
+    /**
+     * Creates a new direct route.
+     * That is a route without a proxy.
+     *
+     * @param target    the host to which to route
+     * @param local     the local address to route from, or
+     *                  <code>null</code> for the default
+     * @param secure    <code>true</code> if the route is (to be) secure,
+     *                  <code>false</code> otherwise
+     */
     public HttpRoute(final HttpHost target, final InetAddress local, final boolean secure) {
-        this(target, local, Collections.emptyList(), secure, TunnelType.PLAIN, LayerType.PLAIN);
+        this(target, local, Collections.<HttpHost>emptyList(), secure,
+                TunnelType.PLAIN, LayerType.PLAIN);
     }
-    
+
+    /**
+     * Creates a new direct insecure route.
+     *
+     * @param target    the host to which to route
+     */
     public HttpRoute(final HttpHost target) {
-        this(target, null, Collections.emptyList(), false, TunnelType.PLAIN, LayerType.PLAIN);
+        this(target, null, Collections.<HttpHost>emptyList(), false,
+                TunnelType.PLAIN, LayerType.PLAIN);
     }
-    
-    public HttpRoute(final HttpHost target, final InetAddress local, final HttpHost proxy, final boolean secure) {
-        this(target, local, Collections.singletonList((HttpHost)Args.notNull((T)proxy, "Proxy host")), secure, secure ? TunnelType.TUNNELLED : TunnelType.PLAIN, secure ? LayerType.LAYERED : LayerType.PLAIN);
+
+    /**
+     * Creates a new route through a proxy.
+     * When using this constructor, the <code>proxy</code> MUST be given.
+     * For convenience, it is assumed that a secure connection will be
+     * layered over a tunnel through the proxy.
+     *
+     * @param target    the host to which to route
+     * @param local     the local address to route from, or
+     *                  <code>null</code> for the default
+     * @param proxy     the proxy to use
+     * @param secure    <code>true</code> if the route is (to be) secure,
+     *                  <code>false</code> otherwise
+     */
+    public HttpRoute(final HttpHost target, final InetAddress local, final HttpHost proxy,
+                     final boolean secure) {
+        this(target, local, Collections.singletonList(Args.notNull(proxy, "Proxy host")), secure,
+                secure ? TunnelType.TUNNELLED : TunnelType.PLAIN,
+                secure ? LayerType.LAYERED    : LayerType.PLAIN);
     }
-    
+
+    /**
+     * Creates a new plain route through a proxy.
+     *
+     * @param target    the host to which to route
+     * @param proxy     the proxy to use
+     *
+     * @since 4.3
+     */
     public HttpRoute(final HttpHost target, final HttpHost proxy) {
         this(target, null, proxy, false);
     }
-    
+
     public final HttpHost getTargetHost() {
         return this.targetHost;
     }
-    
+
     public final InetAddress getLocalAddress() {
         return this.localAddress;
     }
-    
+
     public final InetSocketAddress getLocalSocketAddress() {
-        return (this.localAddress != null) ? new InetSocketAddress(this.localAddress, 0) : null;
+        return this.localAddress != null ? new InetSocketAddress(this.localAddress, 0) : null;
     }
-    
+
     public final int getHopCount() {
-        return (this.proxyChain != null) ? (this.proxyChain.size() + 1) : 1;
+        return proxyChain != null ? proxyChain.size() + 1 : 1;
     }
-    
+
     public final HttpHost getHopTarget(final int hop) {
         Args.notNegative(hop, "Hop index");
-        final int hopcount = this.getHopCount();
+        final int hopcount = getHopCount();
         Args.check(hop < hopcount, "Hop index exceeds tracked route length");
         if (hop < hopcount - 1) {
             return this.proxyChain.get(hop);
+        } else {
+            return this.targetHost;
         }
-        return this.targetHost;
     }
-    
+
     public final HttpHost getProxyHost() {
-        return (this.proxyChain != null && !this.proxyChain.isEmpty()) ? this.proxyChain.get(0) : null;
+        return proxyChain != null && !this.proxyChain.isEmpty() ? this.proxyChain.get(0) : null;
     }
-    
+
     public final TunnelType getTunnelType() {
         return this.tunnelled;
     }
-    
+
     public final boolean isTunnelled() {
-        return this.tunnelled == TunnelType.TUNNELLED;
+        return (this.tunnelled == TunnelType.TUNNELLED);
     }
-    
+
     public final LayerType getLayerType() {
         return this.layered;
     }
-    
+
     public final boolean isLayered() {
-        return this.layered == LayerType.LAYERED;
+        return (this.layered == LayerType.LAYERED);
     }
-    
+
     public final boolean isSecure() {
         return this.secure;
     }
-    
+
+    /**
+     * Compares this route to another.
+     *
+     * @param obj         the object to compare with
+     *
+     * @return  <code>true</code> if the argument is the same route,
+     *          <code>false</code>
+     */
+    @Override
     public final boolean equals(final Object obj) {
         if (this == obj) {
             return true;
         }
         if (obj instanceof HttpRoute) {
-            final HttpRoute that = (HttpRoute)obj;
-            return this.secure == that.secure && this.tunnelled == that.tunnelled && this.layered == that.layered && LangUtils.equals(this.targetHost, that.targetHost) && LangUtils.equals(this.localAddress, that.localAddress) && LangUtils.equals(this.proxyChain, that.proxyChain);
+            final HttpRoute that = (HttpRoute) obj;
+            return
+                    // Do the cheapest tests first
+                    (this.secure    == that.secure) &&
+                            (this.tunnelled == that.tunnelled) &&
+                            (this.layered   == that.layered) &&
+                            LangUtils.equals(this.targetHost, that.targetHost) &&
+                            LangUtils.equals(this.localAddress, that.localAddress) &&
+                            LangUtils.equals(this.proxyChain, that.proxyChain);
+        } else {
+            return false;
         }
-        return false;
     }
-    
+
+
+    /**
+     * Generates a hash code for this route.
+     *
+     * @return  the hash code
+     */
+    @Override
     public final int hashCode() {
-        int hash = 17;
+        int hash = LangUtils.HASH_SEED;
         hash = LangUtils.hashCode(hash, this.targetHost);
         hash = LangUtils.hashCode(hash, this.localAddress);
         if (this.proxyChain != null) {
@@ -144,9 +285,15 @@ public final class HttpRoute implements RouteInfo, Cloneable
         hash = LangUtils.hashCode(hash, this.layered);
         return hash;
     }
-    
+
+    /**
+     * Obtains a description of this route.
+     *
+     * @return  a human-readable representation of this route
+     */
+    @Override
     public final String toString() {
-        final StringBuilder cab = new StringBuilder(50 + this.getHopCount() * 30);
+        final StringBuilder cab = new StringBuilder(50 + getHopCount()*30);
         if (this.localAddress != null) {
             cab.append(this.localAddress);
             cab.append("->");
@@ -171,8 +318,11 @@ public final class HttpRoute implements RouteInfo, Cloneable
         cab.append(this.targetHost);
         return cab.toString();
     }
-    
+
+    // default implementation of clone() is sufficient
+    @Override
     public Object clone() throws CloneNotSupportedException {
         return super.clone();
     }
+
 }

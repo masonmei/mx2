@@ -1,50 +1,65 @@
-// 
-// Decompiled by Procyon v0.5.29
-// 
-
+/**
+ * Logback: the reliable, generic, fast and flexible logging framework.
+ * Copyright (C) 1999-2011, QOS.ch. All rights reserved.
+ *
+ * This program and the accompanying materials are dual-licensed under
+ * either the terms of the Eclipse Public License v1.0 as published by
+ * the Eclipse Foundation
+ *
+ *   or (per the licensee's choosing)
+ *
+ * under the terms of the GNU Lesser General Public License version 2.1
+ * as published by the Free Software Foundation.
+ */
 package com.newrelic.agent.deps.ch.qos.logback.classic.pattern;
 
-import com.newrelic.agent.deps.ch.qos.logback.classic.spi.ILoggingEvent;
 import java.util.List;
 import java.util.TimeZone;
+
+import com.newrelic.agent.deps.ch.qos.logback.classic.spi.ILoggingEvent;
+import com.newrelic.agent.deps.ch.qos.logback.core.CoreConstants;
 import com.newrelic.agent.deps.ch.qos.logback.core.util.CachingDateFormatter;
 
-public class DateConverter extends ClassicConverter
-{
-    long lastTimestamp;
-    String timestampStrCache;
-    CachingDateFormatter cachingDateFormatter;
-    
-    public DateConverter() {
-        this.lastTimestamp = -1L;
-        this.timestampStrCache = null;
-        this.cachingDateFormatter = null;
-    }
-    
+public class DateConverter extends ClassicConverter {
+
+    long lastTimestamp = -1;
+    String timestampStrCache = null;
+    CachingDateFormatter cachingDateFormatter = null;
+
     public void start() {
-        String datePattern = this.getFirstOption();
+
+
+        String datePattern = getFirstOption();
         if (datePattern == null) {
-            datePattern = "yyyy-MM-dd HH:mm:ss,SSS";
+            datePattern = CoreConstants.ISO8601_PATTERN;
         }
-        if (datePattern.equals("ISO8601")) {
-            datePattern = "yyyy-MM-dd HH:mm:ss,SSS";
+
+        if (datePattern.equals(CoreConstants.ISO8601_STR)) {
+            datePattern = CoreConstants.ISO8601_PATTERN;
         }
+
         try {
-            this.cachingDateFormatter = new CachingDateFormatter(datePattern);
+            cachingDateFormatter = new CachingDateFormatter(datePattern);
+            // maximumCacheValidity =
+            // CachedDateFormat.getMaximumCacheValidity(pattern);
+        } catch (IllegalArgumentException e) {
+            addWarn("Could not instantiate SimpleDateFormat with pattern "
+                    + datePattern, e);
+            // default to the ISO8601 format
+            cachingDateFormatter = new CachingDateFormatter(CoreConstants.ISO8601_PATTERN);
         }
-        catch (IllegalArgumentException e) {
-            this.addWarn("Could not instantiate SimpleDateFormat with pattern " + datePattern, e);
-            this.cachingDateFormatter = new CachingDateFormatter("yyyy-MM-dd HH:mm:ss,SSS");
-        }
-        final List optionList = this.getOptionList();
+
+        List optionList = getOptionList();
+
+        // if the option list contains a TZ option, then set it.
         if (optionList != null && optionList.size() > 1) {
-            final TimeZone tz = TimeZone.getTimeZone(optionList.get(1));
-            this.cachingDateFormatter.setTimeZone(tz);
+            TimeZone tz = TimeZone.getTimeZone((String) optionList.get(1));
+            cachingDateFormatter.setTimeZone(tz);
         }
     }
-    
-    public String convert(final ILoggingEvent le) {
-        final long timestamp = le.getTimeStamp();
-        return this.cachingDateFormatter.format(timestamp);
+
+    public String convert(ILoggingEvent le) {
+        long timestamp = le.getTimeStamp();
+        return cachingDateFormatter.format(timestamp);
     }
 }

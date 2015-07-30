@@ -4,6 +4,7 @@
 
 package com.newrelic.agent.instrumentation.pointcuts.frameworks;
 
+import com.newrelic.agent.instrumentation.PointCut;
 import com.newrelic.agent.tracers.metricname.MetricNameFormat;
 import com.newrelic.agent.tracers.DefaultTracer;
 import com.newrelic.agent.tracers.metricname.ClassMethodMetricNameFormat;
@@ -12,7 +13,6 @@ import com.newrelic.agent.tracers.ClassMethodSignature;
 import com.newrelic.agent.Transaction;
 import com.newrelic.agent.instrumentation.TracerFactoryPointCut;
 import com.newrelic.agent.instrumentation.ClassTransformer;
-import com.newrelic.agent.instrumentation.pointcuts.PointCut;
 
 @com.newrelic.agent.instrumentation.pointcuts.PointCut
 public class ProcessActionPortletPointCut extends AbstractPortletPointCut

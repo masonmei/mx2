@@ -115,7 +115,7 @@ public class ClassReflection
     
     public static void setAccessible(final Field field, final boolean flag) throws IllegalArgumentException, IllegalAccessException {
         try {
-            AccessController.doPrivileged((PrivilegedExceptionAction<Object>)new PrivilegedExceptionAction<Void>() {
+            AccessController.doPrivileged(new PrivilegedExceptionAction<Void>() {
                 public Void run() throws Exception {
                     field.setAccessible(flag);
                     return null;
@@ -129,7 +129,7 @@ public class ClassReflection
     
     public static void setAccessible(final Method method, final boolean flag) throws IllegalArgumentException, IllegalAccessException {
         try {
-            AccessController.doPrivileged((PrivilegedExceptionAction<Object>)new PrivilegedExceptionAction<Void>() {
+            AccessController.doPrivileged(new PrivilegedExceptionAction<Void>() {
                 public Void run() throws Exception {
                     method.setAccessible(flag);
                     return null;

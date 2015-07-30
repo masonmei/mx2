@@ -6,10 +6,10 @@ package com.newrelic.agent.instrumentation.pointcuts.frameworks.cxf;
 
 import java.text.MessageFormat;
 import com.newrelic.agent.bridge.TransactionNamePriority;
+import com.newrelic.agent.instrumentation.PointCut;
 import com.newrelic.agent.transaction.TransactionNamingPolicy;
 import java.net.URISyntaxException;
 import java.net.URI;
-import com.newrelic.agent.tracers.metricname.MetricNameFormat;
 import com.newrelic.agent.tracers.DefaultTracer;
 import com.newrelic.agent.tracers.metricname.SimpleMetricNameFormat;
 import com.newrelic.agent.util.Strings;
@@ -19,10 +19,8 @@ import java.lang.reflect.Method;
 import com.newrelic.agent.tracers.Tracer;
 import com.newrelic.agent.tracers.ClassMethodSignature;
 import com.newrelic.agent.Transaction;
-import com.newrelic.agent.instrumentation.classmatchers.ClassMatcher;
 import com.newrelic.agent.instrumentation.classmatchers.ExactClassMatcher;
 import com.newrelic.agent.instrumentation.ClassTransformer;
-import com.newrelic.agent.instrumentation.pointcuts.PointCut;
 import com.newrelic.agent.instrumentation.TracerFactoryPointCut;
 
 @com.newrelic.agent.instrumentation.pointcuts.PointCut
@@ -31,13 +29,15 @@ public class CXFInvokerPointCut extends TracerFactoryPointCut
     private static final String CXF = "CXF";
     
     public CXFInvokerPointCut(final ClassTransformer classTransformer) {
-        super(CXFInvokerPointCut.class, new ExactClassMatcher("org/apache/cxf/service/invoker/AbstractInvoker"), PointCut.createExactMethodMatcher("performInvocation", "(Lorg/apache/cxf/message/Exchange;Ljava/lang/Object;Ljava/lang/reflect/Method;[Ljava/lang/Object;)Ljava/lang/Object;"));
+        super(CXFInvokerPointCut.class,
+                new ExactClassMatcher("org/apache/cxf/service/invoker/AbstractInvoker"),
+                PointCut.createExactMethodMatcher("performInvocation", "(Lorg/apache/cxf/message/Exchange;Ljava/lang/Object;Ljava/lang/reflect/Method;[Ljava/lang/Object;)Ljava/lang/Object;"));
     }
     
     public Tracer doGetTracer(final Transaction transaction, final ClassMethodSignature sig, final Object invoker, final Object[] args) {
         final Object service = args[1];
         final Method method = (Method)args[2];
-        final String address = transaction.getInternalParameters().remove("cfx_end_point");
+        final String address = (String) transaction.getInternalParameters().remove("cfx_end_point");
         if (address != null) {
             final StringBuilder path = new StringBuilder(address);
             if (!address.endsWith("/")) {

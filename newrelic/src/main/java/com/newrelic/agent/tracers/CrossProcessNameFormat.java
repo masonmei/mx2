@@ -66,11 +66,11 @@ public class CrossProcessNameFormat implements MetricNameFormat
         try {
             final JSONParser parser = new JSONParser();
             final JSONArray arr = (JSONArray)parser.parse(decodedAppData);
-            final String crossProcessId = arr.get(0);
-            final String transactionName = arr.get(1);
+            final String crossProcessId = (String) arr.get(0);
+            final String transactionName = (String) arr.get(1);
             String transactionId = null;
             if (arr.size() > 5) {
-                transactionId = arr.get(5);
+                transactionId = (String) arr.get(5);
             }
             return new CrossProcessNameFormat(transactionName, crossProcessId, host, uri, transactionId);
         }

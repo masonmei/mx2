@@ -41,7 +41,7 @@ public abstract class MethodInvokerPointCut extends TracerFactoryPointCut
     }
     
     private static BaseConfig getSpringConfiguration(final AgentConfig config) {
-        final Map<String, Object> props = config.getInstrumentationConfig().getProperty("spring_framework", (Map<String, Object>)Maps.newHashMap());
+        final Map<String, Object> props = config.getInstrumentationConfig().getProperty("spring_framework", Maps.<String, Object>newHashMap());
         return new BaseConfig(props);
     }
     

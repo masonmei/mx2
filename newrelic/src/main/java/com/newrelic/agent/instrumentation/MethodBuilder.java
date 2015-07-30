@@ -95,11 +95,11 @@ public class MethodBuilder
             this.mv.visitInsn(1);
         }
         else if (value instanceof Boolean) {
-            this.mv.push((boolean)value);
+            this.mv.push((Boolean)value);
             this.mv.box(Type.BOOLEAN_TYPE);
         }
         else if (value instanceof Integer) {
-            this.mv.visitIntInsn(17, (int)value);
+            this.mv.visitIntInsn(17, (Integer)value);
             this.mv.box(Type.INT_TYPE);
         }
         else {

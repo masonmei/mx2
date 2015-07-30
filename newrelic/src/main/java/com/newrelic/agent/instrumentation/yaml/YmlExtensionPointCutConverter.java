@@ -111,20 +111,20 @@ public class YmlExtensionPointCutConverter
     }
     
     private static TracerFactory instantiateMethodTracerFactory(final Class clazz) throws Exception {
-        final MethodTracerFactory factory = clazz.newInstance();
+        final MethodTracerFactory factory = (MethodTracerFactory) clazz.newInstance();
         return new CustomTracerFactory(factory);
     }
     
     private static TracerFactory instantiateTracerFactory(final Class<? extends TracerFactory> clazz, final TracerFactoryConfiguration config) throws TracerFactoryException {
         try {
-            return (TracerFactory)clazz.getConstructor(TracerFactoryConfiguration.class).newInstance(config);
+            return clazz.getConstructor(TracerFactoryConfiguration.class).newInstance(config);
         }
         catch (Exception e) {
             try {
-                return (TracerFactory)clazz.getConstructor((Class<?>[])new Class[0]).newInstance(new Object[0]);
+                return clazz.getConstructor((Class<?>[])new Class[0]).newInstance(new Object[0]);
             }
-            catch (Exception e) {
-                throw new TracerFactoryException("Unable to instantiate tracer factory " + clazz.getName(), e);
+            catch (Exception ex) {
+                throw new TracerFactoryException("Unable to instantiate tracer factory " + clazz.getName(), ex);
             }
         }
     }

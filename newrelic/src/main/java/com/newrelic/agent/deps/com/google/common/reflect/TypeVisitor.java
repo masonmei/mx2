@@ -19,7 +19,7 @@ abstract class TypeVisitor
     private final Set<Type> visited;
     
     TypeVisitor() {
-        this.visited = (Set<Type>)Sets.newHashSet();
+        this.visited = Sets.newHashSet();
     }
     
     public final void visit(final Type... types) {

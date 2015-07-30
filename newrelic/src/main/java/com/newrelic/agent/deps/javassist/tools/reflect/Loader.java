@@ -8,7 +8,6 @@ import com.newrelic.agent.deps.javassist.NotFoundException;
 import com.newrelic.agent.deps.javassist.CannotCompileException;
 import com.newrelic.agent.deps.javassist.Translator;
 import com.newrelic.agent.deps.javassist.ClassPool;
-import com.newrelic.agent.deps.javassist.Loader;
 
 public class Loader extends com.newrelic.agent.deps.javassist.Loader
 {

@@ -285,15 +285,15 @@ public class JarExtension
                 }
             }
         }
-        return (Collection<String>)Collections.emptyList();
+        return Collections.<String>emptyList();
     }
     
     public Collection<Class<?>> getClasses() {
         final Collection<String> classNames = this.getClassFileNames();
         if (classNames.isEmpty()) {
-            return (Collection<Class<?>>)Collections.emptyList();
+            return Collections.<Class<?>>emptyList();
         }
-        final Collection<Class<?>> classes = (Collection<Class<?>>)Lists.newArrayList();
+        final Collection<Class<?>> classes = Lists.newArrayList();
         for (String fileName : classNames) {
             final int index = fileName.indexOf(".class");
             fileName = fileName.substring(0, index);

@@ -1,189 +1,339 @@
-// 
-// Decompiled by Procyon v0.5.29
-// 
-
+/***
+ * ASM: a very small and fast Java bytecode manipulation framework
+ * Copyright (c) 2000-2011 INRIA, France Telecom
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. Neither the name of the copyright holders nor the names of its
+ *    contributors may be used to endorse or promote products derived from
+ *    this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE.
+ */
 package com.newrelic.agent.deps.org.objectweb.asm;
 
-public class ByteVector
-{
-    byte[] a;
-    int b;
-    
+/**
+ * A dynamically extensible vector of bytes. This class is roughly equivalent to
+ * a DataOutputStream on top of a ByteArrayOutputStream, but is more efficient.
+ *
+ * @author Eric Bruneton
+ */
+public class ByteVector {
+
+    /**
+     * The content of this vector.
+     */
+    byte[] data;
+
+    /**
+     * Actual number of bytes in this vector.
+     */
+    int length;
+
+    /**
+     * Constructs a new {@link ByteVector ByteVector} with a default initial
+     * size.
+     */
     public ByteVector() {
-        this.a = new byte[64];
+        data = new byte[64];
     }
-    
-    public ByteVector(final int n) {
-        this.a = new byte[n];
+
+    /**
+     * Constructs a new {@link ByteVector ByteVector} with the given initial
+     * size.
+     *
+     * @param initialSize
+     *            the initial size of the byte vector to be constructed.
+     */
+    public ByteVector(final int initialSize) {
+        data = new byte[initialSize];
     }
-    
-    public ByteVector putByte(final int n) {
-        int b = this.b;
-        if (b + 1 > this.a.length) {
-            this.a(1);
+
+    /**
+     * Puts a byte into this byte vector. The byte vector is automatically
+     * enlarged if necessary.
+     *
+     * @param b
+     *            a byte.
+     * @return this byte vector.
+     */
+    public ByteVector putByte(final int b) {
+        int length = this.length;
+        if (length + 1 > data.length) {
+            enlarge(1);
         }
-        this.a[b++] = (byte)n;
-        this.b = b;
+        data[length++] = (byte) b;
+        this.length = length;
         return this;
     }
-    
-    ByteVector a(final int n, final int n2) {
-        int b = this.b;
-        if (b + 2 > this.a.length) {
-            this.a(2);
+
+    /**
+     * Puts two bytes into this byte vector. The byte vector is automatically
+     * enlarged if necessary.
+     *
+     * @param b1
+     *            a byte.
+     * @param b2
+     *            another byte.
+     * @return this byte vector.
+     */
+    ByteVector put11(final int b1, final int b2) {
+        int length = this.length;
+        if (length + 2 > data.length) {
+            enlarge(2);
         }
-        final byte[] a = this.a;
-        a[b++] = (byte)n;
-        a[b++] = (byte)n2;
-        this.b = b;
+        byte[] data = this.data;
+        data[length++] = (byte) b1;
+        data[length++] = (byte) b2;
+        this.length = length;
         return this;
     }
-    
-    public ByteVector putShort(final int n) {
-        int b = this.b;
-        if (b + 2 > this.a.length) {
-            this.a(2);
+
+    /**
+     * Puts a short into this byte vector. The byte vector is automatically
+     * enlarged if necessary.
+     *
+     * @param s
+     *            a short.
+     * @return this byte vector.
+     */
+    public ByteVector putShort(final int s) {
+        int length = this.length;
+        if (length + 2 > data.length) {
+            enlarge(2);
         }
-        final byte[] a = this.a;
-        a[b++] = (byte)(n >>> 8);
-        a[b++] = (byte)n;
-        this.b = b;
+        byte[] data = this.data;
+        data[length++] = (byte) (s >>> 8);
+        data[length++] = (byte) s;
+        this.length = length;
         return this;
     }
-    
-    ByteVector b(final int n, final int n2) {
-        int b = this.b;
-        if (b + 3 > this.a.length) {
-            this.a(3);
+
+    /**
+     * Puts a byte and a short into this byte vector. The byte vector is
+     * automatically enlarged if necessary.
+     *
+     * @param b
+     *            a byte.
+     * @param s
+     *            a short.
+     * @return this byte vector.
+     */
+    ByteVector put12(final int b, final int s) {
+        int length = this.length;
+        if (length + 3 > data.length) {
+            enlarge(3);
         }
-        final byte[] a = this.a;
-        a[b++] = (byte)n;
-        a[b++] = (byte)(n2 >>> 8);
-        a[b++] = (byte)n2;
-        this.b = b;
+        byte[] data = this.data;
+        data[length++] = (byte) b;
+        data[length++] = (byte) (s >>> 8);
+        data[length++] = (byte) s;
+        this.length = length;
         return this;
     }
-    
-    public ByteVector putInt(final int n) {
-        int b = this.b;
-        if (b + 4 > this.a.length) {
-            this.a(4);
+
+    /**
+     * Puts an int into this byte vector. The byte vector is automatically
+     * enlarged if necessary.
+     *
+     * @param i
+     *            an int.
+     * @return this byte vector.
+     */
+    public ByteVector putInt(final int i) {
+        int length = this.length;
+        if (length + 4 > data.length) {
+            enlarge(4);
         }
-        final byte[] a = this.a;
-        a[b++] = (byte)(n >>> 24);
-        a[b++] = (byte)(n >>> 16);
-        a[b++] = (byte)(n >>> 8);
-        a[b++] = (byte)n;
-        this.b = b;
+        byte[] data = this.data;
+        data[length++] = (byte) (i >>> 24);
+        data[length++] = (byte) (i >>> 16);
+        data[length++] = (byte) (i >>> 8);
+        data[length++] = (byte) i;
+        this.length = length;
         return this;
     }
-    
-    public ByteVector putLong(final long n) {
-        int b = this.b;
-        if (b + 8 > this.a.length) {
-            this.a(8);
+
+    /**
+     * Puts a long into this byte vector. The byte vector is automatically
+     * enlarged if necessary.
+     *
+     * @param l
+     *            a long.
+     * @return this byte vector.
+     */
+    public ByteVector putLong(final long l) {
+        int length = this.length;
+        if (length + 8 > data.length) {
+            enlarge(8);
         }
-        final byte[] a = this.a;
-        final int n2 = (int)(n >>> 32);
-        a[b++] = (byte)(n2 >>> 24);
-        a[b++] = (byte)(n2 >>> 16);
-        a[b++] = (byte)(n2 >>> 8);
-        a[b++] = (byte)n2;
-        final int n3 = (int)n;
-        a[b++] = (byte)(n3 >>> 24);
-        a[b++] = (byte)(n3 >>> 16);
-        a[b++] = (byte)(n3 >>> 8);
-        a[b++] = (byte)n3;
-        this.b = b;
+        byte[] data = this.data;
+        int i = (int) (l >>> 32);
+        data[length++] = (byte) (i >>> 24);
+        data[length++] = (byte) (i >>> 16);
+        data[length++] = (byte) (i >>> 8);
+        data[length++] = (byte) i;
+        i = (int) l;
+        data[length++] = (byte) (i >>> 24);
+        data[length++] = (byte) (i >>> 16);
+        data[length++] = (byte) (i >>> 8);
+        data[length++] = (byte) i;
+        this.length = length;
         return this;
     }
-    
+
+    /**
+     * Puts an UTF8 string into this byte vector. The byte vector is
+     * automatically enlarged if necessary.
+     *
+     * @param s
+     *            a String whose UTF8 encoded length must be less than 65536.
+     * @return this byte vector.
+     */
     public ByteVector putUTF8(final String s) {
-        final int length = s.length();
-        if (length > 65535) {
+        int charLength = s.length();
+        if (charLength > 65535) {
             throw new IllegalArgumentException();
         }
-        int b = this.b;
-        if (b + 2 + length > this.a.length) {
-            this.a(2 + length);
+        int len = length;
+        if (len + 2 + charLength > data.length) {
+            enlarge(2 + charLength);
         }
-        final byte[] a = this.a;
-        a[b++] = (byte)(length >>> 8);
-        a[b++] = (byte)length;
-        for (int i = 0; i < length; ++i) {
-            final char char1 = s.charAt(i);
-            if (char1 < '\u0001' || char1 > '\u007f') {
-                this.b = b;
-                return this.encodeUTF8(s, i, 65535);
+        byte[] data = this.data;
+        // optimistic algorithm: instead of computing the byte length and then
+        // serializing the string (which requires two loops), we assume the byte
+        // length is equal to char length (which is the most frequent case), and
+        // we start serializing the string right away. During the serialization,
+        // if we find that this assumption is wrong, we continue with the
+        // general method.
+        data[len++] = (byte) (charLength >>> 8);
+        data[len++] = (byte) charLength;
+        for (int i = 0; i < charLength; ++i) {
+            char c = s.charAt(i);
+            if (c >= '\001' && c <= '\177') {
+                data[len++] = (byte) c;
+            } else {
+                length = len;
+                return encodeUTF8(s, i, 65535);
             }
-            a[b++] = (byte)char1;
         }
-        this.b = b;
+        length = len;
         return this;
     }
-    
-    ByteVector encodeUTF8(final String s, final int n, final int n2) {
-        final int length = s.length();
-        int n3 = n;
-        for (int i = n; i < length; ++i) {
-            final char char1 = s.charAt(i);
-            if (char1 >= '\u0001' && char1 <= '\u007f') {
-                ++n3;
-            }
-            else if (char1 > '\u07ff') {
-                n3 += 3;
-            }
-            else {
-                n3 += 2;
+
+    /**
+     * Puts an UTF8 string into this byte vector. The byte vector is
+     * automatically enlarged if necessary. The string length is encoded in two
+     * bytes before the encoded characters, if there is space for that (i.e. if
+     * this.length - i - 2 >= 0).
+     *
+     * @param s
+     *            the String to encode.
+     * @param i
+     *            the index of the first character to encode. The previous
+     *            characters are supposed to have already been encoded, using
+     *            only one byte per character.
+     * @param maxByteLength
+     *            the maximum byte length of the encoded string, including the
+     *            already encoded characters.
+     * @return this byte vector.
+     */
+    ByteVector encodeUTF8(final String s, int i, int maxByteLength) {
+        int charLength = s.length();
+        int byteLength = i;
+        char c;
+        for (int j = i; j < charLength; ++j) {
+            c = s.charAt(j);
+            if (c >= '\001' && c <= '\177') {
+                byteLength++;
+            } else if (c > '\u07FF') {
+                byteLength += 3;
+            } else {
+                byteLength += 2;
             }
         }
-        if (n3 > n2) {
+        if (byteLength > maxByteLength) {
             throw new IllegalArgumentException();
         }
-        final int n4 = this.b - n - 2;
-        if (n4 >= 0) {
-            this.a[n4] = (byte)(n3 >>> 8);
-            this.a[n4 + 1] = (byte)n3;
+        int start = length - i - 2;
+        if (start >= 0) {
+            data[start] = (byte) (byteLength >>> 8);
+            data[start + 1] = (byte) byteLength;
         }
-        if (this.b + n3 - n > this.a.length) {
-            this.a(n3 - n);
+        if (length + byteLength - i > data.length) {
+            enlarge(byteLength - i);
         }
-        int b = this.b;
-        for (int j = n; j < length; ++j) {
-            final char char2 = s.charAt(j);
-            if (char2 >= '\u0001' && char2 <= '\u007f') {
-                this.a[b++] = (byte)char2;
-            }
-            else if (char2 > '\u07ff') {
-                this.a[b++] = (byte)('\u00e0' | (char2 >> 12 & '\u000f'));
-                this.a[b++] = (byte)('\u0080' | (char2 >> 6 & '?'));
-                this.a[b++] = (byte)('\u0080' | (char2 & '?'));
-            }
-            else {
-                this.a[b++] = (byte)('\u00c0' | (char2 >> 6 & '\u001f'));
-                this.a[b++] = (byte)('\u0080' | (char2 & '?'));
+        int len = length;
+        for (int j = i; j < charLength; ++j) {
+            c = s.charAt(j);
+            if (c >= '\001' && c <= '\177') {
+                data[len++] = (byte) c;
+            } else if (c > '\u07FF') {
+                data[len++] = (byte) (0xE0 | c >> 12 & 0xF);
+                data[len++] = (byte) (0x80 | c >> 6 & 0x3F);
+                data[len++] = (byte) (0x80 | c & 0x3F);
+            } else {
+                data[len++] = (byte) (0xC0 | c >> 6 & 0x1F);
+                data[len++] = (byte) (0x80 | c & 0x3F);
             }
         }
-        this.b = b;
+        length = len;
         return this;
     }
-    
-    public ByteVector putByteArray(final byte[] array, final int n, final int n2) {
-        if (this.b + n2 > this.a.length) {
-            this.a(n2);
+
+    /**
+     * Puts an array of bytes into this byte vector. The byte vector is
+     * automatically enlarged if necessary.
+     *
+     * @param b
+     *            an array of bytes. May be <tt>null</tt> to put <tt>len</tt>
+     *            null bytes into this byte vector.
+     * @param off
+     *            index of the fist byte of b that must be copied.
+     * @param len
+     *            number of bytes of b that must be copied.
+     * @return this byte vector.
+     */
+    public ByteVector putByteArray(final byte[] b, final int off, final int len) {
+        if (length + len > data.length) {
+            enlarge(len);
         }
-        if (array != null) {
-            System.arraycopy(array, n, this.a, this.b, n2);
+        if (b != null) {
+            System.arraycopy(b, off, data, length, len);
         }
-        this.b += n2;
+        length += len;
         return this;
     }
-    
-    private void a(final int n) {
-        final int n2 = 2 * this.a.length;
-        final int n3 = this.b + n;
-        final byte[] a = new byte[(n2 > n3) ? n2 : n3];
-        System.arraycopy(this.a, 0, a, 0, this.b);
-        this.a = a;
+
+    /**
+     * Enlarge this byte vector so that it can receive n more bytes.
+     *
+     * @param size
+     *            number of additional bytes that this byte vector should be
+     *            able to receive.
+     */
+    private void enlarge(final int size) {
+        int length1 = 2 * data.length;
+        int length2 = length + size;
+        byte[] newData = new byte[length1 > length2 ? length1 : length2];
+        System.arraycopy(data, 0, newData, 0, length);
+        data = newData;
     }
 }

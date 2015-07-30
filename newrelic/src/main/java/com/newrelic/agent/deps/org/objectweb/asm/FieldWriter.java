@@ -1,186 +1,329 @@
-// 
-// Decompiled by Procyon v0.5.29
-// 
-
+/***
+ * ASM: a very small and fast Java bytecode manipulation framework
+ * Copyright (c) 2000-2011 INRIA, France Telecom
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. Neither the name of the copyright holders nor the names of its
+ *    contributors may be used to endorse or promote products derived from
+ *    this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE.
+ */
 package com.newrelic.agent.deps.org.objectweb.asm;
 
-final class FieldWriter extends FieldVisitor
-{
-    private final ClassWriter b;
-    private final int c;
-    private final int d;
-    private final int e;
-    private int f;
-    private int g;
-    private AnnotationWriter h;
-    private AnnotationWriter i;
-    private AnnotationWriter k;
-    private AnnotationWriter l;
-    private Attribute j;
-    
-    FieldWriter(final ClassWriter b, final int c, final String s, final String s2, final String s3, final Object o) {
-        super(327680);
-        if (b.B == null) {
-            b.B = this;
+/**
+ * An {@link FieldVisitor} that generates Java fields in bytecode form.
+ *
+ * @author Eric Bruneton
+ */
+final class FieldWriter extends FieldVisitor {
+
+    /**
+     * The class writer to which this field must be added.
+     */
+    private final ClassWriter cw;
+
+    /**
+     * Access flags of this field.
+     */
+    private final int access;
+
+    /**
+     * The index of the constant pool item that contains the name of this
+     * method.
+     */
+    private final int name;
+
+    /**
+     * The index of the constant pool item that contains the descriptor of this
+     * field.
+     */
+    private final int desc;
+
+    /**
+     * The index of the constant pool item that contains the signature of this
+     * field.
+     */
+    private int signature;
+
+    /**
+     * The index of the constant pool item that contains the constant value of
+     * this field.
+     */
+    private int value;
+
+    /**
+     * The runtime visible annotations of this field. May be <tt>null</tt>.
+     */
+    private AnnotationWriter anns;
+
+    /**
+     * The runtime invisible annotations of this field. May be <tt>null</tt>.
+     */
+    private AnnotationWriter ianns;
+
+    /**
+     * The runtime visible type annotations of this field. May be <tt>null</tt>.
+     */
+    private AnnotationWriter tanns;
+
+    /**
+     * The runtime invisible type annotations of this field. May be
+     * <tt>null</tt>.
+     */
+    private AnnotationWriter itanns;
+
+    /**
+     * The non standard attributes of this field. May be <tt>null</tt>.
+     */
+    private Attribute attrs;
+
+    // ------------------------------------------------------------------------
+    // Constructor
+    // ------------------------------------------------------------------------
+
+    /**
+     * Constructs a new {@link FieldWriter}.
+     *
+     * @param cw
+     *            the class writer to which this field must be added.
+     * @param access
+     *            the field's access flags (see {@link Opcodes}).
+     * @param name
+     *            the field's name.
+     * @param desc
+     *            the field's descriptor (see {@link Type}).
+     * @param signature
+     *            the field's signature. May be <tt>null</tt>.
+     * @param value
+     *            the field's constant value. May be <tt>null</tt>.
+     */
+    FieldWriter(final ClassWriter cw, final int access, final String name,
+                final String desc, final String signature, final Object value) {
+        super(Opcodes.ASM5);
+        if (cw.firstField == null) {
+            cw.firstField = this;
+        } else {
+            cw.lastField.fv = this;
         }
-        else {
-            b.C.fv = this;
+        cw.lastField = this;
+        this.cw = cw;
+        this.access = access;
+        this.name = cw.newUTF8(name);
+        this.desc = cw.newUTF8(desc);
+        if (ClassReader.SIGNATURES && signature != null) {
+            this.signature = cw.newUTF8(signature);
         }
-        b.C = this;
-        this.b = b;
-        this.c = c;
-        this.d = b.newUTF8(s);
-        this.e = b.newUTF8(s2);
-        if (s3 != null) {
-            this.f = b.newUTF8(s3);
-        }
-        if (o != null) {
-            this.g = b.a(o).a;
+        if (value != null) {
+            this.value = cw.newConstItem(value).index;
         }
     }
-    
-    public AnnotationVisitor visitAnnotation(final String s, final boolean b) {
-        final ByteVector byteVector = new ByteVector();
-        byteVector.putShort(this.b.newUTF8(s)).putShort(0);
-        final AnnotationWriter annotationWriter = new AnnotationWriter(this.b, true, byteVector, byteVector, 2);
-        if (b) {
-            annotationWriter.g = this.h;
-            this.h = annotationWriter;
+
+    // ------------------------------------------------------------------------
+    // Implementation of the FieldVisitor abstract class
+    // ------------------------------------------------------------------------
+
+    @Override
+    public AnnotationVisitor visitAnnotation(final String desc,
+                                             final boolean visible) {
+        if (!ClassReader.ANNOTATIONS) {
+            return null;
         }
-        else {
-            annotationWriter.g = this.i;
-            this.i = annotationWriter;
+        ByteVector bv = new ByteVector();
+        // write type, and reserve space for values count
+        bv.putShort(cw.newUTF8(desc)).putShort(0);
+        AnnotationWriter aw = new AnnotationWriter(cw, true, bv, bv, 2);
+        if (visible) {
+            aw.next = anns;
+            anns = aw;
+        } else {
+            aw.next = ianns;
+            ianns = aw;
         }
-        return annotationWriter;
+        return aw;
     }
-    
-    public AnnotationVisitor visitTypeAnnotation(final int n, final TypePath typePath, final String s, final boolean b) {
-        final ByteVector byteVector = new ByteVector();
-        AnnotationWriter.a(n, typePath, byteVector);
-        byteVector.putShort(this.b.newUTF8(s)).putShort(0);
-        final AnnotationWriter annotationWriter = new AnnotationWriter(this.b, true, byteVector, byteVector, byteVector.b - 2);
-        if (b) {
-            annotationWriter.g = this.k;
-            this.k = annotationWriter;
+
+    @Override
+    public AnnotationVisitor visitTypeAnnotation(final int typeRef,
+                                                 final TypePath typePath, final String desc, final boolean visible) {
+        if (!ClassReader.ANNOTATIONS) {
+            return null;
         }
-        else {
-            annotationWriter.g = this.l;
-            this.l = annotationWriter;
+        ByteVector bv = new ByteVector();
+        // write target_type and target_info
+        AnnotationWriter.putTarget(typeRef, typePath, bv);
+        // write type, and reserve space for values count
+        bv.putShort(cw.newUTF8(desc)).putShort(0);
+        AnnotationWriter aw = new AnnotationWriter(cw, true, bv, bv,
+                bv.length - 2);
+        if (visible) {
+            aw.next = tanns;
+            tanns = aw;
+        } else {
+            aw.next = itanns;
+            itanns = aw;
         }
-        return annotationWriter;
+        return aw;
     }
-    
-    public void visitAttribute(final Attribute j) {
-        j.a = this.j;
-        this.j = j;
+
+    @Override
+    public void visitAttribute(final Attribute attr) {
+        attr.next = attrs;
+        attrs = attr;
     }
-    
+
+    @Override
     public void visitEnd() {
     }
-    
-    int a() {
-        int n = 8;
-        if (this.g != 0) {
-            this.b.newUTF8("ConstantValue");
-            n += 8;
+
+    // ------------------------------------------------------------------------
+    // Utility methods
+    // ------------------------------------------------------------------------
+
+    /**
+     * Returns the size of this field.
+     *
+     * @return the size of this field.
+     */
+    int getSize() {
+        int size = 8;
+        if (value != 0) {
+            cw.newUTF8("ConstantValue");
+            size += 8;
         }
-        if ((this.c & 0x1000) != 0x0 && ((this.b.b & 0xFFFF) < 49 || (this.c & 0x40000) != 0x0)) {
-            this.b.newUTF8("Synthetic");
-            n += 6;
+        if ((access & Opcodes.ACC_SYNTHETIC) != 0) {
+            if ((cw.version & 0xFFFF) < Opcodes.V1_5
+                    || (access & ClassWriter.ACC_SYNTHETIC_ATTRIBUTE) != 0) {
+                cw.newUTF8("Synthetic");
+                size += 6;
+            }
         }
-        if ((this.c & 0x20000) != 0x0) {
-            this.b.newUTF8("Deprecated");
-            n += 6;
+        if ((access & Opcodes.ACC_DEPRECATED) != 0) {
+            cw.newUTF8("Deprecated");
+            size += 6;
         }
-        if (this.f != 0) {
-            this.b.newUTF8("Signature");
-            n += 8;
+        if (ClassReader.SIGNATURES && signature != 0) {
+            cw.newUTF8("Signature");
+            size += 8;
         }
-        if (this.h != null) {
-            this.b.newUTF8("RuntimeVisibleAnnotations");
-            n += 8 + this.h.a();
+        if (ClassReader.ANNOTATIONS && anns != null) {
+            cw.newUTF8("RuntimeVisibleAnnotations");
+            size += 8 + anns.getSize();
         }
-        if (this.i != null) {
-            this.b.newUTF8("RuntimeInvisibleAnnotations");
-            n += 8 + this.i.a();
+        if (ClassReader.ANNOTATIONS && ianns != null) {
+            cw.newUTF8("RuntimeInvisibleAnnotations");
+            size += 8 + ianns.getSize();
         }
-        if (this.k != null) {
-            this.b.newUTF8("RuntimeVisibleTypeAnnotations");
-            n += 8 + this.k.a();
+        if (ClassReader.ANNOTATIONS && tanns != null) {
+            cw.newUTF8("RuntimeVisibleTypeAnnotations");
+            size += 8 + tanns.getSize();
         }
-        if (this.l != null) {
-            this.b.newUTF8("RuntimeInvisibleTypeAnnotations");
-            n += 8 + this.l.a();
+        if (ClassReader.ANNOTATIONS && itanns != null) {
+            cw.newUTF8("RuntimeInvisibleTypeAnnotations");
+            size += 8 + itanns.getSize();
         }
-        if (this.j != null) {
-            n += this.j.a(this.b, null, 0, -1, -1);
+        if (attrs != null) {
+            size += attrs.getSize(cw, null, 0, -1, -1);
         }
-        return n;
+        return size;
     }
-    
-    void a(final ByteVector byteVector) {
-        byteVector.putShort(this.c & ~(0x60000 | (this.c & 0x40000) / 64)).putShort(this.d).putShort(this.e);
-        int n = 0;
-        if (this.g != 0) {
-            ++n;
+
+    /**
+     * Puts the content of this field into the given byte vector.
+     *
+     * @param out
+     *            where the content of this field must be put.
+     */
+    void put(final ByteVector out) {
+        final int FACTOR = ClassWriter.TO_ACC_SYNTHETIC;
+        int mask = Opcodes.ACC_DEPRECATED | ClassWriter.ACC_SYNTHETIC_ATTRIBUTE
+                | ((access & ClassWriter.ACC_SYNTHETIC_ATTRIBUTE) / FACTOR);
+        out.putShort(access & ~mask).putShort(name).putShort(desc);
+        int attributeCount = 0;
+        if (value != 0) {
+            ++attributeCount;
         }
-        if ((this.c & 0x1000) != 0x0 && ((this.b.b & 0xFFFF) < 49 || (this.c & 0x40000) != 0x0)) {
-            ++n;
+        if ((access & Opcodes.ACC_SYNTHETIC) != 0) {
+            if ((cw.version & 0xFFFF) < Opcodes.V1_5
+                    || (access & ClassWriter.ACC_SYNTHETIC_ATTRIBUTE) != 0) {
+                ++attributeCount;
+            }
         }
-        if ((this.c & 0x20000) != 0x0) {
-            ++n;
+        if ((access & Opcodes.ACC_DEPRECATED) != 0) {
+            ++attributeCount;
         }
-        if (this.f != 0) {
-            ++n;
+        if (ClassReader.SIGNATURES && signature != 0) {
+            ++attributeCount;
         }
-        if (this.h != null) {
-            ++n;
+        if (ClassReader.ANNOTATIONS && anns != null) {
+            ++attributeCount;
         }
-        if (this.i != null) {
-            ++n;
+        if (ClassReader.ANNOTATIONS && ianns != null) {
+            ++attributeCount;
         }
-        if (this.k != null) {
-            ++n;
+        if (ClassReader.ANNOTATIONS && tanns != null) {
+            ++attributeCount;
         }
-        if (this.l != null) {
-            ++n;
+        if (ClassReader.ANNOTATIONS && itanns != null) {
+            ++attributeCount;
         }
-        if (this.j != null) {
-            n += this.j.a();
+        if (attrs != null) {
+            attributeCount += attrs.getCount();
         }
-        byteVector.putShort(n);
-        if (this.g != 0) {
-            byteVector.putShort(this.b.newUTF8("ConstantValue"));
-            byteVector.putInt(2).putShort(this.g);
+        out.putShort(attributeCount);
+        if (value != 0) {
+            out.putShort(cw.newUTF8("ConstantValue"));
+            out.putInt(2).putShort(value);
         }
-        if ((this.c & 0x1000) != 0x0 && ((this.b.b & 0xFFFF) < 49 || (this.c & 0x40000) != 0x0)) {
-            byteVector.putShort(this.b.newUTF8("Synthetic")).putInt(0);
+        if ((access & Opcodes.ACC_SYNTHETIC) != 0) {
+            if ((cw.version & 0xFFFF) < Opcodes.V1_5
+                    || (access & ClassWriter.ACC_SYNTHETIC_ATTRIBUTE) != 0) {
+                out.putShort(cw.newUTF8("Synthetic")).putInt(0);
+            }
         }
-        if ((this.c & 0x20000) != 0x0) {
-            byteVector.putShort(this.b.newUTF8("Deprecated")).putInt(0);
+        if ((access & Opcodes.ACC_DEPRECATED) != 0) {
+            out.putShort(cw.newUTF8("Deprecated")).putInt(0);
         }
-        if (this.f != 0) {
-            byteVector.putShort(this.b.newUTF8("Signature"));
-            byteVector.putInt(2).putShort(this.f);
+        if (ClassReader.SIGNATURES && signature != 0) {
+            out.putShort(cw.newUTF8("Signature"));
+            out.putInt(2).putShort(signature);
         }
-        if (this.h != null) {
-            byteVector.putShort(this.b.newUTF8("RuntimeVisibleAnnotations"));
-            this.h.a(byteVector);
+        if (ClassReader.ANNOTATIONS && anns != null) {
+            out.putShort(cw.newUTF8("RuntimeVisibleAnnotations"));
+            anns.put(out);
         }
-        if (this.i != null) {
-            byteVector.putShort(this.b.newUTF8("RuntimeInvisibleAnnotations"));
-            this.i.a(byteVector);
+        if (ClassReader.ANNOTATIONS && ianns != null) {
+            out.putShort(cw.newUTF8("RuntimeInvisibleAnnotations"));
+            ianns.put(out);
         }
-        if (this.k != null) {
-            byteVector.putShort(this.b.newUTF8("RuntimeVisibleTypeAnnotations"));
-            this.k.a(byteVector);
+        if (ClassReader.ANNOTATIONS && tanns != null) {
+            out.putShort(cw.newUTF8("RuntimeVisibleTypeAnnotations"));
+            tanns.put(out);
         }
-        if (this.l != null) {
-            byteVector.putShort(this.b.newUTF8("RuntimeInvisibleTypeAnnotations"));
-            this.l.a(byteVector);
+        if (ClassReader.ANNOTATIONS && itanns != null) {
+            out.putShort(cw.newUTF8("RuntimeInvisibleTypeAnnotations"));
+            itanns.put(out);
         }
-        if (this.j != null) {
-            this.j.a(this.b, null, 0, -1, -1, byteVector);
+        if (attrs != null) {
+            attrs.put(cw, null, 0, -1, -1, out);
         }
     }
 }

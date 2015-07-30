@@ -39,7 +39,7 @@ public class CtField extends CtMember
         fi.setAccessFlags(src.fieldInfo.getAccessFlags());
         final ConstPool cp = fi.getConstPool();
         while (iterator.hasNext()) {
-            final AttributeInfo ainfo = iterator.next();
+            final AttributeInfo ainfo = (AttributeInfo) iterator.next();
             fi.addAttribute(ainfo.copy(cp, null));
         }
     }

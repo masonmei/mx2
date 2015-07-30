@@ -4,32 +4,28 @@
 
 package com.newrelic.agent.deps.org.reflections.vfs;
 
-import java.io.IOException;
-import java.io.InputStream;
+import com.newrelic.agent.deps.com.google.common.base.Predicate;
+import com.newrelic.agent.deps.com.google.common.collect.Iterables;
+import com.newrelic.agent.deps.com.google.common.collect.Lists;
 import com.newrelic.agent.deps.org.apache.commons.vfs2.FileObject;
 import com.newrelic.agent.deps.org.apache.commons.vfs2.FileSystemManager;
 import com.newrelic.agent.deps.org.apache.commons.vfs2.FileType;
 import com.newrelic.agent.deps.org.apache.commons.vfs2.VFS;
-import com.newrelic.agent.deps.org.reflections.util.ClasspathHelper;
-import java.net.URLConnection;
-import java.net.JarURLConnection;
-import java.util.jar.JarFile;
-import javax.annotation.Nullable;
-import java.io.UnsupportedEncodingException;
-import java.net.URLDecoder;
-import java.net.URISyntaxException;
-import java.io.File;
-import com.newrelic.agent.deps.com.google.common.collect.Iterables;
-import java.util.ArrayList;
-import com.newrelic.agent.deps.org.reflections.util.Utils;
-import com.newrelic.agent.deps.com.google.common.base.Predicate;
-import java.util.Collection;
-import com.newrelic.agent.deps.com.google.common.collect.Lists;
-import java.util.Iterator;
-import com.newrelic.agent.deps.org.reflections.ReflectionsException;
 import com.newrelic.agent.deps.org.reflections.Reflections;
-import java.net.URL;
+import com.newrelic.agent.deps.org.reflections.ReflectionsException;
+import com.newrelic.agent.deps.org.reflections.util.ClasspathHelper;
+import com.newrelic.agent.deps.org.reflections.util.Utils;
+
+import javax.annotation.Nullable;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UnsupportedEncodingException;
+import java.net.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
+import java.util.jar.JarFile;
 
 public abstract class Vfs
 {
@@ -95,11 +91,11 @@ public abstract class Vfs
         Iterable<File> result = new ArrayList<File>();
         for (final URL url : inUrls) {
             try {
-                result = Iterables.concat((Iterable<? extends File>)result, (Iterable<? extends File>)Iterables.filter((Iterable<? extends T>)new Iterable<File>() {
+                result = Iterables.concat(result, Iterables.filter(new Iterable<File>() {
                     public Iterator<File> iterator() {
                         return Vfs.fromURL(url).getFiles().iterator();
                     }
-                }, (Predicate<? super T>)filePredicate));
+                }, filePredicate));
             }
             catch (Throwable e) {
                 if (Reflections.log == null) {
@@ -158,9 +154,13 @@ public abstract class Vfs
         catch (Exception ex3) {}
         return null;
     }
-    
+
     static {
-        Vfs.defaultUrlTypes = (List<UrlType>)Lists.newArrayList(DefaultUrlTypes.values());
+        ArrayList<UrlType> urlTypes = new ArrayList<UrlType>();
+        for (DefaultUrlTypes urlType : DefaultUrlTypes.values()) {
+            urlTypes.add(urlType);
+        }
+        Vfs.defaultUrlTypes = urlTypes;
     }
     
     public enum DefaultUrlTypes implements UrlType

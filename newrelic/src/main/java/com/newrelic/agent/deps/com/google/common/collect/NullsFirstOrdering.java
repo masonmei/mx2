@@ -1,72 +1,81 @@
-// 
-// Decompiled by Procyon v0.5.29
-// 
+/*
+ * Copyright (C) 2007 The Guava Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package com.newrelic.agent.deps.com.google.common.collect;
 
-import javax.annotation.Nullable;
 import com.newrelic.agent.deps.com.google.common.annotations.GwtCompatible;
+
 import java.io.Serializable;
 
+import javax.annotation.Nullable;
+
+/** An ordering that treats {@code null} as less than all other values. */
 @GwtCompatible(serializable = true)
-final class NullsFirstOrdering<T> extends Ordering<T> implements Serializable
-{
+final class NullsFirstOrdering<T> extends Ordering<T> implements Serializable {
     final Ordering<? super T> ordering;
-    private static final long serialVersionUID = 0L;
-    
-    NullsFirstOrdering(final Ordering<? super T> ordering) {
+
+    NullsFirstOrdering(Ordering<? super T> ordering) {
         this.ordering = ordering;
     }
-    
-    @Override
-    public int compare(@Nullable final T left, @Nullable final T right) {
+
+    @Override public int compare(@Nullable T left, @Nullable T right) {
         if (left == right) {
             return 0;
         }
         if (left == null) {
-            return -1;
+            return RIGHT_IS_GREATER;
         }
         if (right == null) {
-            return 1;
+            return LEFT_IS_GREATER;
         }
-        return this.ordering.compare((Object)left, (Object)right);
+        return ordering.compare(left, right);
     }
-    
-    @Override
-    public <S extends T> Ordering<S> reverse() {
-        return this.ordering.reverse().nullsLast();
+
+    @Override public <S extends T> Ordering<S> reverse() {
+        // ordering.reverse() might be optimized, so let it do its thing
+        return ordering.reverse().nullsLast();
     }
-    
-    @Override
-    public <S extends T> Ordering<S> nullsFirst() {
-        return (Ordering<S>)this;
+
+    @SuppressWarnings("unchecked") // still need the right way to explain this
+    @Override public <S extends T> Ordering<S> nullsFirst() {
+        return (Ordering<S>) this;
     }
-    
-    @Override
-    public <S extends T> Ordering<S> nullsLast() {
-        return this.ordering.nullsLast();
+
+    @Override public <S extends T> Ordering<S> nullsLast() {
+        return ordering.nullsLast();
     }
-    
-    @Override
-    public boolean equals(@Nullable final Object object) {
+
+    @Override public boolean equals(@Nullable Object object) {
         if (object == this) {
             return true;
         }
         if (object instanceof NullsFirstOrdering) {
-            final NullsFirstOrdering<?> that = (NullsFirstOrdering<?>)object;
+            NullsFirstOrdering<?> that = (NullsFirstOrdering<?>) object;
             return this.ordering.equals(that.ordering);
         }
         return false;
     }
-    
-    @Override
-    public int hashCode() {
-        return this.ordering.hashCode() ^ 0x39153A74;
+
+    @Override public int hashCode() {
+        return ordering.hashCode() ^ 957692532; // meaningless
     }
-    
-    @Override
-    public String toString() {
-        final String value = String.valueOf(String.valueOf(this.ordering));
-        return new StringBuilder(13 + value.length()).append(value).append(".nullsFirst()").toString();
+
+    @Override public String toString() {
+        return ordering + ".nullsFirst()";
     }
+
+    private static final long serialVersionUID = 0;
 }

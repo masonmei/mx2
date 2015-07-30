@@ -4,7 +4,6 @@
 
 package com.newrelic.agent.deps.com.google.common.collect;
 
-import java.util.Comparator;
 import com.newrelic.agent.deps.com.google.common.annotations.GwtCompatible;
 
 @GwtCompatible(serializable = true)
@@ -14,7 +13,7 @@ class EmptyImmutableSetMultimap extends ImmutableSetMultimap<Object, Object>
     private static final long serialVersionUID = 0L;
     
     private EmptyImmutableSetMultimap() {
-        super(ImmutableMap.of(), 0, null);
+        super(ImmutableMap.<Object, ImmutableSet<Object>>of(), 0, null);
     }
     
     private Object readResolve() {

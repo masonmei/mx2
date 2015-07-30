@@ -104,7 +104,7 @@ abstract class AbstractMultimap<K, V> implements Multimap<K, V>
     }
     
     Set<K> createKeySet() {
-        return (Set<K>)new Maps.KeySet((Map<Object, Object>)this.asMap());
+        return (Set<K>)new Maps.KeySet(this.asMap());
     }
     
     @Override

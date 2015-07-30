@@ -68,7 +68,7 @@ public abstract class AbstractController implements ProfilingTaskController
     
     public void addProfile(final ProfilerParameters parameters) {
         if (this.samplePeriodInMillis == -1) {
-            this.samplePeriodInMillis = (int)(Object)parameters.getSamplePeriodInMillis();
+            this.samplePeriodInMillis = (Integer)(Object)parameters.getSamplePeriodInMillis();
         }
         this.delegate.addProfile(parameters);
     }

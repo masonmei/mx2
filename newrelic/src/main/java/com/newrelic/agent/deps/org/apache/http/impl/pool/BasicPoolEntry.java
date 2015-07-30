@@ -19,12 +19,12 @@ public class BasicPoolEntry extends PoolEntry<HttpHost, HttpClientConnection>
     
     public void close() {
         try {
-            ((PoolEntry<T, HttpClientConnection>)this).getConnection().close();
+            this.getConnection().close();
         }
         catch (IOException ex) {}
     }
     
     public boolean isClosed() {
-        return !((PoolEntry<T, HttpClientConnection>)this).getConnection().isOpen();
+        return !this.getConnection().isOpen();
     }
 }

@@ -20,7 +20,7 @@ public class InboundHeaderState
     private final InboundHeaders inboundHeaders;
     private final CatState catState;
     private final SyntheticsState synState;
-    
+
     public InboundHeaderState(final Transaction tx, final InboundHeaders inboundHeaders) {
         this.tx = tx;
         this.inboundHeaders = inboundHeaders;
@@ -33,7 +33,7 @@ public class InboundHeaderState
             this.catState = this.parseCatHeaders();
         }
     }
-    
+
     public String getUnparsedSyntheticsHeader() {
         String result = null;
         if (this.inboundHeaders != null) {
@@ -41,7 +41,7 @@ public class InboundHeaderState
         }
         return result;
     }
-    
+
     private SyntheticsState parseSyntheticsHeader() {
         final String synHeader = this.getUnparsedSyntheticsHeader();
         if (synHeader == null || synHeader.length() == 0) {
@@ -67,7 +67,7 @@ public class InboundHeaderState
         }
         SyntheticsState result;
         try {
-            result = new SyntheticsState(version, arr.get(1), arr.get(2), arr.get(3), arr.get(4));
+            result = new SyntheticsState(version, (Number)arr.get(1), (String)arr.get(2), (String)arr.get(3), (String)arr.get(4));
         }
         catch (RuntimeException rex) {
             Agent.LOG.log(Level.FINE, "Synthetic transaction tracing failed: while parsing header: {0}: {1}", new Object[] { rex.getClass().getSimpleName(), rex.getLocalizedMessage() });
@@ -75,7 +75,7 @@ public class InboundHeaderState
         }
         return result;
     }
-    
+
     private CatState parseCatHeaders() {
         final String clientCrossProcessID = HeadersUtil.getIdHeader(this.inboundHeaders);
         if (clientCrossProcessID == null || this.tx.isIgnore()) {
@@ -96,9 +96,13 @@ public class InboundHeaderState
         if (arr == null) {
             return new CatState(clientCrossProcessID, null, Boolean.FALSE, null, null);
         }
-        return new CatState(clientCrossProcessID, (arr.size() >= 1) ? arr.get(0) : null, (arr.size() >= 2) ? arr.get(1) : null, (arr.size() >= 3) ? arr.get(2) : null, (arr.size() >= 4) ? ServiceUtils.hexStringToInt(arr.get(3)) : null);
+        return new CatState(clientCrossProcessID,
+                (arr.size() >= 1) ? (String)arr.get(0) : null,
+                (arr.size() >= 2) ? (Boolean)arr.get(1) : null,
+                (arr.size() >= 3) ? (String)arr.get(2) : null,
+                (arr.size() >= 4) ? ServiceUtils.hexStringToInt((String)arr.get(3)) : null);
     }
-    
+
     public int getSyntheticsVersion() {
         final Integer obj = this.synState.getVersion();
         if (obj == null) {
@@ -110,52 +114,52 @@ public class InboundHeaderState
         }
         return version;
     }
-    
+
     private boolean isSupportedSyntheticsVersion() {
         final int version = this.getSyntheticsVersion();
         return version >= 1 && version <= 1;
     }
-    
+
     public boolean isTrustedSyntheticsRequest() {
         return this.isSupportedSyntheticsVersion() && this.synState.getAccountId() != null;
     }
-    
+
     public String getSyntheticsResourceId() {
         return this.synState.getSyntheticsResourceId();
     }
-    
+
     public String getSyntheticsJobId() {
         return this.synState.getSyntheticsJobId();
     }
-    
+
     public String getSyntheticsMonitorId() {
         return this.synState.getSyntheticsMonitorId();
     }
-    
+
     public boolean isTrustedCatRequest() {
         return this.catState.getClientCrossProcessId() != null;
     }
-    
+
     public String getClientCrossProcessId() {
         return this.catState.getClientCrossProcessId();
     }
-    
+
     public String getReferrerGuid() {
         return this.catState.getReferrerGuid();
     }
-    
+
     public boolean forceTrace() {
         return this.catState.forceTrace();
     }
-    
+
     public Integer getReferringPathHash() {
         return this.catState.getReferringPathHash();
     }
-    
+
     public String getInboundTripId() {
         return this.catState.getInboundTripId();
     }
-    
+
     public long getRequestContentLength() {
         long contentLength = -1L;
         final String contentLengthString = (this.inboundHeaders == null) ? null : this.inboundHeaders.getHeader("Content-Length");
@@ -170,7 +174,7 @@ public class InboundHeaderState
         }
         return contentLength;
     }
-    
+
     private boolean isClientCrossProcessIdTrusted(final String clientCrossProcessId) {
         final String accountId = this.getAccountId(clientCrossProcessId);
         if (accountId != null) {
@@ -188,7 +192,7 @@ public class InboundHeaderState
         }
         return false;
     }
-    
+
     private String getAccountId(final String clientCrossProcessId) {
         String accountId = null;
         final int index = clientCrossProcessId.indexOf("#");
@@ -197,7 +201,7 @@ public class InboundHeaderState
         }
         return accountId;
     }
-    
+
     private JSONArray getJSONArray(final String json) {
         JSONArray result = null;
         if (json != null) {
@@ -213,7 +217,7 @@ public class InboundHeaderState
         }
         return result;
     }
-    
+
     static final class CatState
     {
         private final String clientCrossProcessId;
@@ -222,7 +226,7 @@ public class InboundHeaderState
         private final String inboundTripId;
         private final Integer referringPathHash;
         static final CatState NONE;
-        
+
         CatState(final String clientCrossProcessId, final String referrerGuid, final Boolean forceTrace, final String inboundTripId, final Integer referringPathHash) {
             this.clientCrossProcessId = clientCrossProcessId;
             this.referrerGuid = referrerGuid;
@@ -230,32 +234,32 @@ public class InboundHeaderState
             this.inboundTripId = inboundTripId;
             this.referringPathHash = referringPathHash;
         }
-        
+
         String getClientCrossProcessId() {
             return this.clientCrossProcessId;
         }
-        
+
         String getReferrerGuid() {
             return this.referrerGuid;
         }
-        
+
         boolean forceTrace() {
             return this.forceTrace;
         }
-        
+
         String getInboundTripId() {
             return this.inboundTripId;
         }
-        
+
         Integer getReferringPathHash() {
             return this.referringPathHash;
         }
-        
+
         static {
             NONE = new CatState(null, null, Boolean.FALSE, null, null);
         }
     }
-    
+
     static final class SyntheticsState
     {
         private final Integer version;
@@ -264,7 +268,7 @@ public class InboundHeaderState
         private final String syntheticsJobId;
         private final String syntheticsMonitorId;
         static final SyntheticsState NONE;
-        
+
         SyntheticsState(final Integer version, final Number accountId, final String syntheticsResourceId, final String syntheticsJobId, final String syntheticsMonitorId) {
             this.version = version;
             this.accountId = accountId;
@@ -272,27 +276,27 @@ public class InboundHeaderState
             this.syntheticsJobId = syntheticsJobId;
             this.syntheticsMonitorId = syntheticsMonitorId;
         }
-        
+
         Integer getVersion() {
             return this.version;
         }
-        
+
         Number getAccountId() {
             return this.accountId;
         }
-        
+
         String getSyntheticsResourceId() {
             return this.syntheticsResourceId;
         }
-        
+
         String getSyntheticsJobId() {
             return this.syntheticsJobId;
         }
-        
+
         String getSyntheticsMonitorId() {
             return this.syntheticsMonitorId;
         }
-        
+
         static {
             NONE = new SyntheticsState(null, null, null, null, null);
         }

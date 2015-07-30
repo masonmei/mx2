@@ -48,16 +48,16 @@ class JarCollectorServiceProcessor
     
     JarCollectorServiceProcessor(final List<String> ignoreJars) {
         this.ignoreJars = ignoreJars;
-        this.sentJars = (Map<URL, JarInfo>)CacheBuilder.newBuilder().maximumSize(1000L).weakKeys().build().asMap();
+        this.sentJars = CacheBuilder.newBuilder().maximumSize(1000L).weakKeys().<URL, JarInfo>build().asMap();
         final AgentConfig config = ServiceFactory.getConfigService().getDefaultAgentConfig();
-        if (!(this.skipTempJars = (boolean)config.getValue("jar_collector.skip_temp_jars", (Object)true))) {
+        if (!(this.skipTempJars = (Boolean)config.getValue("jar_collector.skip_temp_jars", (Object)true))) {
             Agent.LOG.finest("Jar collector: temporary jars will be transmitted to the host");
         }
     }
     
     protected synchronized List<Jar> processModuleData(Collection<URL> urlsToProcess, final boolean sendAll) {
-        urlsToProcess = (Collection<URL>)Sets.newHashSet((Iterable<?>)urlsToProcess);
-        final List<Jar> jars = (List<Jar>)Lists.newArrayList();
+        urlsToProcess = Sets.newHashSet(urlsToProcess);
+        final List<Jar> jars = Lists.newArrayList();
         if (sendAll) {
             urlsToProcess.addAll(this.sentJars.keySet());
         }
@@ -70,7 +70,7 @@ class JarCollectorServiceProcessor
     }
     
     private Map<URL, JarInfo> processUrls(final Collection<URL> urls, final List<Jar> jars) {
-        final Map<URL, JarInfo> jarDetails = (Map<URL, JarInfo>)Maps.newHashMap();
+        final Map<URL, JarInfo> jarDetails = Maps.newHashMap();
         for (final URL address : urls) {
             JarInfo jar = JarCollectorServiceProcessor.NON_JAR;
             try {
@@ -140,21 +140,21 @@ class JarCollectorServiceProcessor
     }
     
     private static JarInfo getJarInfo(final URL url, final String sha1Checksum) throws IOException {
-        final Map<String, String> attributes = (Map<String, String>)Maps.newHashMap();
+        final Map<String, String> attributes = Maps.newHashMap();
         attributes.put("sha1Checksum", sha1Checksum);
         final JarInputStream jarFile = EmbeddedJars.getJarInputStream(url);
         try {
             try {
-                final Map<String, String> pom = getPom(jarFile);
+                Map pom = getPom(jarFile);
                 if (pom != null) {
                     attributes.putAll(pom);
-                    final JarInfo jarInfo = new JarInfo(pom.get("version"), attributes);
+                    final JarInfo jarInfo = new JarInfo((String)pom.get("version"), attributes);
                     jarFile.close();
                     return jarInfo;
                 }
             }
             catch (Exception ex) {
-                Agent.LOG.log(Level.FINEST, (Throwable)ex, "{0}", new Object[] { ex.getMessage() });
+                Agent.LOG.log(Level.FINEST, ex, "{0}", new Object[] { ex.getMessage() });
             }
             String version = getVersion(jarFile);
             if (version == null) {
@@ -169,8 +169,8 @@ class JarCollectorServiceProcessor
         }
     }
     
-    private static Map<String, String> getPom(final JarInputStream jarFile) throws IOException {
-        Map<String, String> pom = null;
+    private static Map<Object, Object> getPom(final JarInputStream jarFile) throws IOException {
+        Map<Object, Object> pom = null;
         JarEntry entry = null;
         while ((entry = jarFile.getNextJarEntry()) != null) {
             if (entry.getName().startsWith("META-INF/maven") && entry.getName().endsWith("pom.properties")) {
@@ -179,7 +179,7 @@ class JarCollectorServiceProcessor
                 }
                 final Properties props = new Properties();
                 props.load(jarFile);
-                pom = (Map<String, String>)props;
+                pom = props;
             }
         }
         return pom;

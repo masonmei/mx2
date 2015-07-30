@@ -25,20 +25,20 @@ import com.newrelic.agent.deps.com.google.common.collect.Lists;
 public class ClassResolvers
 {
     public static ClassResolver getEmbeddedJarsClassResolver() {
-        final Collection<ClassResolver> resolvers = (Collection<ClassResolver>)Lists.newArrayList();
+        final Collection<ClassResolver> resolvers = Lists.newArrayList();
         for (final String name : EmbeddedJarFilesImpl.INSTANCE.getEmbeddedAgentJarFileNames()) {
             try {
                 resolvers.add(getJarClassResolver(EmbeddedJarFilesImpl.INSTANCE.getJarFileInAgent(name)));
             }
             catch (IOException e) {
-                Agent.LOG.log(Level.SEVERE, (Throwable)e, "Unable to load {0} : {1}", new Object[] { name, e.getMessage() });
+                Agent.LOG.log(Level.SEVERE, e, "Unable to load {0} : {1}", name, e.getMessage());
             }
         }
         return getMultiResolver(resolvers);
     }
     
     public static ClassResolver getJarClassResolver(final File jarFile) throws IOException {
-        final Set<String> classNames = (Set<String>)Sets.newHashSet();
+        final Set<String> classNames = Sets.newHashSet();
         final JarFile jar = new JarFile(jarFile);
         try {
             final Enumeration<JarEntry> e = jar.entries();

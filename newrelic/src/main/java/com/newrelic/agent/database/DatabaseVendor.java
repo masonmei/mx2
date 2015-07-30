@@ -4,25 +4,21 @@
 
 package com.newrelic.agent.database;
 
-import java.util.HashMap;
-import java.util.Iterator;
+import java.util.*;
+
 import com.newrelic.agent.deps.org.json.simple.parser.ParseException;
 import java.util.logging.Level;
 import com.newrelic.agent.Agent;
-import java.util.Arrays;
 import com.newrelic.agent.deps.org.json.simple.parser.JSONParser;
 import com.newrelic.agent.deps.org.json.simple.JSONArray;
 import com.newrelic.agent.deps.com.google.common.collect.ImmutableSet;
-import java.util.Set;
-import java.util.LinkedList;
-import java.util.Collection;
+
 import java.sql.ResultSet;
 import com.newrelic.agent.tracers.metricname.SimpleMetricNameFormat;
 import java.text.MessageFormat;
 import java.sql.DatabaseMetaData;
 import java.util.regex.Matcher;
 import java.sql.SQLException;
-import java.util.Map;
 import java.util.regex.Pattern;
 import com.newrelic.agent.tracers.metricname.MetricNameFormat;
 
@@ -47,11 +43,11 @@ public enum DatabaseVendor
         }
         
         public String getHost(final String url) {
-            final Matcher matcher = DatabaseVendor$2.POSTGRES_URL_PATTERN.matcher(url);
+            final Matcher matcher = DatabaseVendor.POSTGRES_URL_PATTERN.matcher(url);
             if (matcher.matches()) {
                 return matcher.group(1);
             }
-            if (DatabaseVendor$2.POSTGRES_URL_PATTERN_DB.matcher(url).matches()) {
+            if (DatabaseVendor.POSTGRES_URL_PATTERN_DB.matcher(url).matches()) {
                 return "localhost";
             }
             return super.getHost(url);
@@ -71,25 +67,29 @@ public enum DatabaseVendor
                 try {
                     final JSONArray parse = (JSONArray)new JSONParser().parse(json);
                     if (RecordSql.obfuscated.equals(recordSql)) {
-                        this.scrubPlan(parse.get(0));
+                        this.scrubPlan((Map<String, Object>) parse.get(0));
                     }
-                    return (Collection<Collection<Object>>)Arrays.asList(parse);
+                    return Arrays.asList((Collection<Object>)parse);
                 }
                 catch (ParseException e) {
                     Agent.LOG.log(Level.FINER, "Unable to parse explain plan: {0}", new Object[] { e.toString() });
-                    return (Collection<Collection<Object>>)Arrays.asList(Arrays.asList("Unable to parse explain plan"));
+                    Collection<Object> strings = Collections.emptyList();
+                    strings.add("Unable to parse explain plan");
+                    return Arrays.asList(strings);
                 }
             }
-            return (Collection<Collection<Object>>)Arrays.asList(Arrays.asList("No rows were returned by the explain plan"));
+            Collection<Object> strings = Collections.emptyList();
+            strings.add("No rows were returned by the explain plan");
+            return Arrays.asList(strings);
         }
         
         private void scrubPlan(final Map<String, Object> plan) {
-            final Map<String, Object> innerPlan = plan.get("Plan");
+            final Map<String, Object> innerPlan = (Map<String, Object>) plan.get("Plan");
             if (innerPlan != null) {
                 this.scrubPlan(innerPlan);
             }
             else {
-                final JSONArray plans = plan.get("Plans");
+                final JSONArray plans = (JSONArray) plan.get("Plans");
                 if (plans != null) {
                     for (final Object childPlan : plans) {
                         this.scrubPlan((Map<String, Object>)childPlan);

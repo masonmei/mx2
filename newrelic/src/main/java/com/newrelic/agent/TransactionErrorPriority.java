@@ -10,12 +10,12 @@ public enum TransactionErrorPriority
 {
     API {
         protected boolean updatePriority(final AtomicReference<TransactionErrorPriority> current) {
-            return this != current.get() && (current.compareAndSet(TransactionErrorPriority$1.TRACER, this) || current.compareAndSet(TransactionErrorPriority$1.ASYNC_POINTCUT, this));
+            return this != current.get() && (current.compareAndSet(TRACER, this) || current.compareAndSet(ASYNC_POINTCUT, this));
         }
     }, 
     TRACER {
         protected boolean updatePriority(final AtomicReference<TransactionErrorPriority> current) {
-            return this == current.get() || current.compareAndSet(TransactionErrorPriority$2.ASYNC_POINTCUT, this);
+            return this == current.get() || current.compareAndSet(ASYNC_POINTCUT, this);
         }
     }, 
     ASYNC_POINTCUT {

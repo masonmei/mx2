@@ -56,7 +56,7 @@ public class InstrumentationImpl implements Instrumentation
     
     public InstrumentationImpl(final Logger logger) {
         this.objectCache = new InsertOnlyArray<Object>(16);
-        this.weaveClasses = Sets.newSetFromMap((Map<Type, Boolean>)Maps.newConcurrentMap());
+        this.weaveClasses = Sets.newSetFromMap(Maps.<Type, Boolean>newConcurrentMap());
         this.logger = logger;
     }
     

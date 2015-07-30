@@ -1,149 +1,249 @@
-// 
-// Decompiled by Procyon v0.5.29
-// 
+/*
+ * ====================================================================
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ * ====================================================================
+ *
+ * This software consists of voluntary contributions made by many
+ * individuals on behalf of the Apache Software Foundation.  For more
+ * information on the Apache Software Foundation, please see
+ * <http://www.apache.org/>.
+ *
+ */
 
 package com.newrelic.agent.deps.org.apache.http.client.protocol;
 
-import com.newrelic.agent.deps.org.apache.http.client.config.RequestConfig;
-import com.newrelic.agent.deps.org.apache.http.auth.AuthState;
-import com.newrelic.agent.deps.org.apache.http.client.AuthCache;
-import com.newrelic.agent.deps.org.apache.http.client.CredentialsProvider;
-import com.newrelic.agent.deps.org.apache.http.auth.AuthSchemeProvider;
-import com.newrelic.agent.deps.org.apache.http.cookie.CookieSpecProvider;
-import com.newrelic.agent.deps.org.apache.http.config.Lookup;
-import com.newrelic.agent.deps.org.apache.http.cookie.CookieOrigin;
-import com.newrelic.agent.deps.org.apache.http.cookie.CookieSpec;
-import com.newrelic.agent.deps.org.apache.http.client.CookieStore;
 import java.net.URI;
 import java.util.List;
+
+import com.newrelic.agent.deps.org.apache.http.annotation.NotThreadSafe;
+import com.newrelic.agent.deps.org.apache.http.auth.AuthSchemeProvider;
+import com.newrelic.agent.deps.org.apache.http.auth.AuthState;
+import com.newrelic.agent.deps.org.apache.http.client.AuthCache;
+import com.newrelic.agent.deps.org.apache.http.client.CookieStore;
+import com.newrelic.agent.deps.org.apache.http.client.CredentialsProvider;
+import com.newrelic.agent.deps.org.apache.http.client.config.RequestConfig;
+import com.newrelic.agent.deps.org.apache.http.config.Lookup;
 import com.newrelic.agent.deps.org.apache.http.conn.routing.HttpRoute;
 import com.newrelic.agent.deps.org.apache.http.conn.routing.RouteInfo;
+import com.newrelic.agent.deps.org.apache.http.cookie.CookieOrigin;
+import com.newrelic.agent.deps.org.apache.http.cookie.CookieSpec;
+import com.newrelic.agent.deps.org.apache.http.cookie.CookieSpecProvider;
 import com.newrelic.agent.deps.org.apache.http.protocol.BasicHttpContext;
 import com.newrelic.agent.deps.org.apache.http.protocol.HttpContext;
-import com.newrelic.agent.deps.org.apache.http.annotation.NotThreadSafe;
 import com.newrelic.agent.deps.org.apache.http.protocol.HttpCoreContext;
 
+/**
+ * Adaptor class that provides convenience type safe setters and getters
+ * for common {@link HttpContext} attributes used in the course
+ * of HTTP request execution.
+ *
+ * @since 4.3
+ */
 @NotThreadSafe
-public class HttpClientContext extends HttpCoreContext
-{
-    public static final String HTTP_ROUTE = "http.route";
+public class HttpClientContext extends HttpCoreContext {
+
+    /**
+     * Attribute name of a {@link org.apache.http.conn.routing.RouteInfo}
+     * object that represents the actual connection route.
+     */
+    public static final String HTTP_ROUTE   = "http.route";
+
+    /**
+     * Attribute name of a {@link List} object that represents a collection of all
+     * redirect locations received in the process of request execution.
+     */
     public static final String REDIRECT_LOCATIONS = "http.protocol.redirect-locations";
-    public static final String COOKIESPEC_REGISTRY = "http.cookiespec-registry";
-    public static final String COOKIE_SPEC = "http.cookie-spec";
-    public static final String COOKIE_ORIGIN = "http.cookie-origin";
-    public static final String COOKIE_STORE = "http.cookie-store";
-    public static final String CREDS_PROVIDER = "http.auth.credentials-provider";
-    public static final String AUTH_CACHE = "http.auth.auth-cache";
-    public static final String TARGET_AUTH_STATE = "http.auth.target-scope";
-    public static final String PROXY_AUTH_STATE = "http.auth.proxy-scope";
-    public static final String USER_TOKEN = "http.user-token";
-    public static final String AUTHSCHEME_REGISTRY = "http.authscheme-registry";
+
+    /**
+     * Attribute name of a {@link org.apache.http.config.Lookup} object that represents
+     * the actual {@link CookieSpecProvider} registry.
+     */
+    public static final String COOKIESPEC_REGISTRY   = "http.cookiespec-registry";
+
+    /**
+     * Attribute name of a {@link org.apache.http.cookie.CookieSpec}
+     * object that represents the actual cookie specification.
+     */
+    public static final String COOKIE_SPEC           = "http.cookie-spec";
+
+    /**
+     * Attribute name of a {@link org.apache.http.cookie.CookieOrigin}
+     * object that represents the actual details of the origin server.
+     */
+    public static final String COOKIE_ORIGIN         = "http.cookie-origin";
+
+    /**
+     * Attribute name of a {@link org.apache.http.client.CookieStore}
+     * object that represents the actual cookie store.
+     */
+    public static final String COOKIE_STORE          = "http.cookie-store";
+
+    /**
+     * Attribute name of a {@link org.apache.http.client.CredentialsProvider}
+     * object that represents the actual credentials provider.
+     */
+    public static final String CREDS_PROVIDER        = "http.auth.credentials-provider";
+
+    /**
+     * Attribute name of a {@link org.apache.http.client.AuthCache} object
+     * that represents the auth scheme cache.
+     */
+    public static final String AUTH_CACHE            = "http.auth.auth-cache";
+
+    /**
+     * Attribute name of a {@link org.apache.http.auth.AuthState}
+     * object that represents the actual target authentication state.
+     */
+    public static final String TARGET_AUTH_STATE     = "http.auth.target-scope";
+
+    /**
+     * Attribute name of a {@link org.apache.http.auth.AuthState}
+     * object that represents the actual proxy authentication state.
+     */
+    public static final String PROXY_AUTH_STATE      = "http.auth.proxy-scope";
+
+    /**
+     * Attribute name of a {@link Object} object that represents
+     * the actual user identity such as user {@link java.security.Principal}.
+     */
+    public static final String USER_TOKEN            = "http.user-token";
+
+    /**
+     * Attribute name of a {@link org.apache.http.config.Lookup} object that represents
+     * the actual {@link AuthSchemeProvider} registry.
+     */
+    public static final String AUTHSCHEME_REGISTRY   = "http.authscheme-registry";
+
+    /**
+     * Attribute name of a {@link org.apache.http.client.config.RequestConfig} object that
+     * represents the actual request configuration.
+     */
     public static final String REQUEST_CONFIG = "http.request-config";
-    
+
     public static HttpClientContext adapt(final HttpContext context) {
         if (context instanceof HttpClientContext) {
-            return (HttpClientContext)context;
+            return (HttpClientContext) context;
+        } else {
+            return new HttpClientContext(context);
         }
-        return new HttpClientContext(context);
     }
-    
+
     public static HttpClientContext create() {
         return new HttpClientContext(new BasicHttpContext());
     }
-    
+
     public HttpClientContext(final HttpContext context) {
         super(context);
     }
-    
+
     public HttpClientContext() {
+        super();
     }
-    
+
     public RouteInfo getHttpRoute() {
-        return this.getAttribute("http.route", HttpRoute.class);
+        return getAttribute(HTTP_ROUTE, HttpRoute.class);
     }
-    
+
+    @SuppressWarnings("unchecked")
     public List<URI> getRedirectLocations() {
-        return this.getAttribute("http.protocol.redirect-locations", (Class<List<URI>>)List.class);
+        return getAttribute(REDIRECT_LOCATIONS, List.class);
     }
-    
+
     public CookieStore getCookieStore() {
-        return this.getAttribute("http.cookie-store", CookieStore.class);
+        return getAttribute(COOKIE_STORE, CookieStore.class);
     }
-    
+
     public void setCookieStore(final CookieStore cookieStore) {
-        this.setAttribute("http.cookie-store", cookieStore);
+        setAttribute(COOKIE_STORE, cookieStore);
     }
-    
+
     public CookieSpec getCookieSpec() {
-        return this.getAttribute("http.cookie-spec", CookieSpec.class);
+        return getAttribute(COOKIE_SPEC, CookieSpec.class);
     }
-    
+
     public CookieOrigin getCookieOrigin() {
-        return this.getAttribute("http.cookie-origin", CookieOrigin.class);
+        return getAttribute(COOKIE_ORIGIN, CookieOrigin.class);
     }
-    
+
+    @SuppressWarnings("unchecked")
     private <T> Lookup<T> getLookup(final String name, final Class<T> clazz) {
-        return this.getAttribute(name, (Class<Lookup<T>>)Lookup.class);
+        return getAttribute(name, Lookup.class);
     }
-    
+
     public Lookup<CookieSpecProvider> getCookieSpecRegistry() {
-        return this.getLookup("http.cookiespec-registry", CookieSpecProvider.class);
+        return getLookup(COOKIESPEC_REGISTRY, CookieSpecProvider.class);
     }
-    
+
     public void setCookieSpecRegistry(final Lookup<CookieSpecProvider> lookup) {
-        this.setAttribute("http.cookiespec-registry", lookup);
+        setAttribute(COOKIESPEC_REGISTRY, lookup);
     }
-    
+
     public Lookup<AuthSchemeProvider> getAuthSchemeRegistry() {
-        return this.getLookup("http.authscheme-registry", AuthSchemeProvider.class);
+        return getLookup(AUTHSCHEME_REGISTRY, AuthSchemeProvider.class);
     }
-    
+
     public void setAuthSchemeRegistry(final Lookup<AuthSchemeProvider> lookup) {
-        this.setAttribute("http.authscheme-registry", lookup);
+        setAttribute(AUTHSCHEME_REGISTRY, lookup);
     }
-    
+
     public CredentialsProvider getCredentialsProvider() {
-        return this.getAttribute("http.auth.credentials-provider", CredentialsProvider.class);
+        return getAttribute(CREDS_PROVIDER, CredentialsProvider.class);
     }
-    
+
     public void setCredentialsProvider(final CredentialsProvider credentialsProvider) {
-        this.setAttribute("http.auth.credentials-provider", credentialsProvider);
+        setAttribute(CREDS_PROVIDER, credentialsProvider);
     }
-    
+
     public AuthCache getAuthCache() {
-        return this.getAttribute("http.auth.auth-cache", AuthCache.class);
+        return getAttribute(AUTH_CACHE, AuthCache.class);
     }
-    
+
     public void setAuthCache(final AuthCache authCache) {
-        this.setAttribute("http.auth.auth-cache", authCache);
+        setAttribute(AUTH_CACHE, authCache);
     }
-    
+
     public AuthState getTargetAuthState() {
-        return this.getAttribute("http.auth.target-scope", AuthState.class);
+        return getAttribute(TARGET_AUTH_STATE, AuthState.class);
     }
-    
+
     public AuthState getProxyAuthState() {
-        return this.getAttribute("http.auth.proxy-scope", AuthState.class);
+        return getAttribute(PROXY_AUTH_STATE, AuthState.class);
     }
-    
+
     public <T> T getUserToken(final Class<T> clazz) {
-        return this.getAttribute("http.user-token", clazz);
+        return getAttribute(USER_TOKEN, clazz);
     }
-    
+
     public Object getUserToken() {
-        return this.getAttribute("http.user-token");
+        return getAttribute(USER_TOKEN);
     }
-    
+
     public void setUserToken(final Object obj) {
-        this.setAttribute("http.user-token", obj);
+        setAttribute(USER_TOKEN, obj);
     }
-    
+
     public RequestConfig getRequestConfig() {
-        final RequestConfig config = this.getAttribute("http.request-config", RequestConfig.class);
-        return (config != null) ? config : RequestConfig.DEFAULT;
+        final RequestConfig config = getAttribute(REQUEST_CONFIG, RequestConfig.class);
+        return config != null ? config : RequestConfig.DEFAULT;
     }
-    
+
     public void setRequestConfig(final RequestConfig config) {
-        this.setAttribute("http.request-config", config);
+        setAttribute(REQUEST_CONFIG, config);
     }
+
 }

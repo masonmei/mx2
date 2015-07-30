@@ -39,7 +39,7 @@ public class LocalVariableAnnotationNode extends TypeAnnotationNode
         for (int i = 0; i < array.length; ++i) {
             array[i] = ((LabelNode)this.start.get(i)).getLabel();
             array2[i] = ((LabelNode)this.end.get(i)).getLabel();
-            array3[i] = (int)this.index.get(i);
+            array3[i] = (Integer)this.index.get(i);
         }
         this.accept(methodVisitor.visitLocalVariableAnnotation(this.typeRef, this.typePath, array, array2, array3, this.desc, true));
     }

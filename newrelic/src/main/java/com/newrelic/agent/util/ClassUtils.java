@@ -21,8 +21,7 @@ public class ClassUtils
     }
     
     private static Method findSuperDefinition(final Class<?> clazz, Method method) {
-        final Class[] arr$;
-        final Class<?>[] interfaces = (Class<?>[])(arr$ = clazz.getInterfaces());
+        final Class[] arr$ = clazz.getInterfaces();
         final int len$ = arr$.length;
         int i$ = 0;
         while (i$ < len$) {
@@ -35,7 +34,6 @@ public class ClassUtils
                 ++i$;
                 continue;
             }
-            break;
         }
         final Class<?> parentClass = clazz.getSuperclass();
         if (parentClass != null) {
@@ -50,7 +48,7 @@ public class ClassUtils
     
     public static Set<String> getClassReferences(final byte[] classBytes) {
         final ClassReader cr = new ClassReader(classBytes);
-        final Set<String> classNames = (Set<String>)Sets.newHashSet();
+        final Set<String> classNames = Sets.newHashSet();
         final ClassVisitor cv = new ClassVisitor(327680) {
             public void visit(final int version, final int access, final String name, final String signature, final String superName, final String[] interfaces) {
                 this.addType(Type.getObjectType(superName));
@@ -80,15 +78,15 @@ public class ClassUtils
                 this.addMethodClasses(name, desc);
                 return new MethodVisitor(327680) {
                     public void visitFieldInsn(final int opcode, final String owner, final String name, final String desc) {
-                        ClassVisitor.this.addType(Type.getType(desc));
+                        addType(Type.getType(desc));
                     }
                     
                     public void visitMethodInsn(final int opcode, final String owner, final String name, final String desc, final boolean itf) {
-                        ClassVisitor.this.addMethodClasses(name, desc);
+                        addMethodClasses(name, desc);
                     }
                     
                     public void visitLocalVariable(final String name, final String desc, final String signature, final Label start, final Label end, final int index) {
-                        ClassVisitor.this.addType(Type.getType(desc));
+                        addType(Type.getType(desc));
                     }
                 };
             }

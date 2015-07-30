@@ -94,7 +94,7 @@ public class DeadLockDetector
                 final long otherId = thread2.getLockOwnerId();
                 skipIds.add(otherId);
                 final ThreadInfo otherThread = idToThreads.get(otherId);
-                final Map<String, String> parameters = (Map<String, String>)Maps.newHashMapWithExpectedSize(4);
+                final Map<String, String> parameters = Maps.newHashMapWithExpectedSize(4);
                 parameters.put("jvm.thread_name", thread2.getThreadName());
                 final Map<String, StackTraceElement[]> stackTraces = new HashMap<String, StackTraceElement[]>();
                 stackTraces.put(thread2.getThreadName(), thread2.getStackTrace());

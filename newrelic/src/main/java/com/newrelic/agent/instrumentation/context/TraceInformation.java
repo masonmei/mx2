@@ -23,12 +23,12 @@ public class TraceInformation
     private Set<Method> ignoreTransactionMethods;
     
     public Map<Method, TraceDetails> getTraceAnnotations() {
-        return (this.traces == null) ? Collections.emptyMap() : Collections.unmodifiableMap((Map<? extends Method, ? extends TraceDetails>)this.traces);
+        return (this.traces == null) ? Collections.<Method, TraceDetails>emptyMap() : Collections.unmodifiableMap(this.traces);
     }
     
     void pullAll(final Map<Method, TraceDetails> tracedMethods) {
         if (this.traces == null) {
-            this.traces = (Map<Method, TraceDetails>)Maps.newHashMap((Map<?, ?>)tracedMethods);
+            this.traces = Maps.newHashMap(tracedMethods);
         }
         else {
             for (final Map.Entry<Method, TraceDetails> entry : tracedMethods.entrySet()) {
@@ -39,7 +39,7 @@ public class TraceInformation
     
     void putTraceAnnotation(final Method method, TraceDetails trace) {
         if (this.traces == null) {
-            this.traces = (Map<Method, TraceDetails>)Maps.newHashMap();
+            this.traces = Maps.newHashMap();
         }
         else {
             final TraceDetails existing = this.traces.get(method);
@@ -52,30 +52,30 @@ public class TraceInformation
     }
     
     public Set<Method> getIgnoreApdexMethods() {
-        return (this.ignoreApdexMethods == null) ? Collections.emptySet() : this.ignoreApdexMethods;
+        return (this.ignoreApdexMethods == null) ? Collections.<Method>emptySet() : this.ignoreApdexMethods;
     }
     
     public Set<Method> getIgnoreTransactionMethods() {
-        return (this.ignoreTransactionMethods == null) ? Collections.emptySet() : this.ignoreTransactionMethods;
+        return (this.ignoreTransactionMethods == null) ? Collections.<Method>emptySet() : this.ignoreTransactionMethods;
     }
     
     public void addIgnoreApdexMethod(final String methodName, final String methodDesc) {
         if (this.ignoreApdexMethods == null) {
-            this.ignoreApdexMethods = (Set<Method>)Sets.newHashSet();
+            this.ignoreApdexMethods = Sets.newHashSet();
         }
         this.ignoreApdexMethods.add(new Method(methodName, methodDesc));
     }
     
     public void addIgnoreTransactionMethod(final String methodName, final String methodDesc) {
         if (this.ignoreTransactionMethods == null) {
-            this.ignoreTransactionMethods = (Set<Method>)Sets.newHashSet();
+            this.ignoreTransactionMethods = Sets.newHashSet();
         }
         this.ignoreTransactionMethods.add(new Method(methodName, methodDesc));
     }
     
     public void addIgnoreTransactionMethod(final Method m) {
         if (this.ignoreTransactionMethods == null) {
-            this.ignoreTransactionMethods = (Set<Method>)Sets.newHashSet();
+            this.ignoreTransactionMethods = Sets.newHashSet();
         }
         this.ignoreTransactionMethods.add(m);
     }

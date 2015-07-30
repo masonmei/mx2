@@ -13,7 +13,7 @@ public class HigherPriorityApplicationNamingPolicy extends AbstractApplicationNa
     
     public boolean canSetApplicationName(final Transaction transaction, final ApplicationNamePriority priority) {
         final PriorityApplicationName pan = transaction.getPriorityApplicationName();
-        return priority.compareTo((Enum)pan.getPriority()) > 0;
+        return priority.compareTo(pan.getPriority()) > 0;
     }
     
     public static HigherPriorityApplicationNamingPolicy getInstance() {

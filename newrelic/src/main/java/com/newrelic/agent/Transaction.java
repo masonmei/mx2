@@ -158,7 +158,7 @@ public class Transaction implements ITransaction
         this.guid = TransactionGuidFactory.generateGuid();
         this.autoAppNamingEnabled = defaultConfig.isAutoAppNamingEnabled();
         this.transactionNamingEnabled = this.initializeTransactionNamingEnabled(defaultConfig);
-        this.ignoreErrorPriority = (boolean)defaultConfig.getValue("error_collector.ignoreErrorPriority", (Object)Boolean.TRUE);
+        this.ignoreErrorPriority = (boolean)defaultConfig.getValue("error_collector.ignoreErrorPriority", Boolean.TRUE);
         final TransactionTraceService ttService = ServiceFactory.getTransactionTraceService();
         this.ttEnabled = ttService.isEnabled();
         this.counts = new TransactionCounts(defaultConfig);
@@ -587,7 +587,7 @@ public class Transaction implements ITransaction
         else {
             final Object val = this.getIntrinsicAttributes().remove("cpu_time");
             if (val != null && val instanceof Long) {
-                totalCpuTime = (long)val;
+                totalCpuTime = (Long)val;
             }
             else {
                 totalCpuTime = 0L;
@@ -633,7 +633,7 @@ public class Transaction implements ITransaction
         final Object val = this.getIntrinsicAttributes().remove("cpu_time");
         long totalCpuTime;
         if (val != null && val instanceof Long) {
-            totalCpuTime = (long)val;
+            totalCpuTime = (Long)val;
         }
         else {
             totalCpuTime = 0L;
@@ -646,7 +646,7 @@ public class Transaction implements ITransaction
     
     public void recordFinalGCTime(final TransactionStats stats) {
         if (this.isTransactionTraceEnabled() && this.getRunningDurationInNanos() > this.getTransactionTracerConfig().getTransactionThresholdInNanos()) {
-            Long totalGCTime = this.getIntrinsicAttributes().get("gc_time");
+            Long totalGCTime = (Long) this.getIntrinsicAttributes().get("gc_time");
             if (totalGCTime == null && this.startGCTimeInMillis > -1L) {
                 final long gcTime = getGCTime();
                 if (gcTime != this.startGCTimeInMillis) {
@@ -667,7 +667,7 @@ public class Transaction implements ITransaction
                 final Object val = current.getValue().getAttribute("unstarted_async_activity");
                 Map<String, Integer> keys;
                 if (val == null) {
-                    keys = (Map<String, Integer>)Maps.newHashMap();
+                    keys = Maps.newHashMap();
                 }
                 else {
                     keys = (Map<String, Integer>)val;

@@ -146,7 +146,7 @@ public class Strings
     }
     
     public static Pattern getPatternFromGlobs(final List<String> globs) {
-        final List<String> patterns = (List<String>)Lists.newArrayListWithCapacity(globs.size());
+        final List<String> patterns = Lists.newArrayListWithCapacity(globs.size());
         for (final String glob : globs) {
             patterns.add('(' + getGlobPattern(glob) + ')');
         }

@@ -161,7 +161,7 @@ public class SimpleStatsEngine
         final float threshold = totalTime * 0.02f;
         final Set<String> remove = new HashSet<String>();
         for (final Map.Entry<String, StatsBase> entry : this.stats.entrySet()) {
-            final ResponseTimeStatsImpl statsObj = entry.getValue();
+            final ResponseTimeStatsImpl statsObj = (ResponseTimeStatsImpl)entry.getValue();
             if (statsObj.getTotalExclusiveTime() < threshold && this.trimmableMetric(entry.getKey())) {
                 if (other == null) {
                     other = statsObj;

@@ -1,884 +1,1462 @@
-// 
-// Decompiled by Procyon v0.5.29
-// 
-
+/***
+ * ASM: a very small and fast Java bytecode manipulation framework
+ * Copyright (c) 2000-2011 INRIA, France Telecom
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. Neither the name of the copyright holders nor the names of its
+ *    contributors may be used to endorse or promote products derived from
+ *    this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE.
+ */
 package com.newrelic.agent.deps.org.objectweb.asm;
 
-final class Frame
-{
-    static final int[] a;
-    Label b;
-    int[] c;
-    int[] d;
-    private int[] e;
-    private int[] f;
-    private int g;
-    private int h;
-    private int[] i;
-    
-    private int a(final int n) {
-        if (this.e == null || n >= this.e.length) {
-            return 0x2000000 | n;
+/**
+ * Information about the input and output stack map frames of a basic block.
+ *
+ * @author Eric Bruneton
+ */
+final class Frame {
+
+    /*
+     * Frames are computed in a two steps process: during the visit of each
+     * instruction, the state of the frame at the end of current basic block is
+     * updated by simulating the action of the instruction on the previous state
+     * of this so called "output frame". In visitMaxs, a fix point algorithm is
+     * used to compute the "input frame" of each basic block, i.e. the stack map
+     * frame at the beginning of the basic block, starting from the input frame
+     * of the first basic block (which is computed from the method descriptor),
+     * and by using the previously computed output frames to compute the input
+     * state of the other blocks.
+     * 
+     * All output and input frames are stored as arrays of integers. Reference
+     * and array types are represented by an index into a type table (which is
+     * not the same as the constant pool of the class, in order to avoid adding
+     * unnecessary constants in the pool - not all computed frames will end up
+     * being stored in the stack map table). This allows very fast type
+     * comparisons.
+     * 
+     * Output stack map frames are computed relatively to the input frame of the
+     * basic block, which is not yet known when output frames are computed. It
+     * is therefore necessary to be able to represent abstract types such as
+     * "the type at position x in the input frame locals" or "the type at
+     * position x from the top of the input frame stack" or even "the type at
+     * position x in the input frame, with y more (or less) array dimensions".
+     * This explains the rather complicated type format used in output frames.
+     * 
+     * This format is the following: DIM KIND VALUE (4, 4 and 24 bits). DIM is a
+     * signed number of array dimensions (from -8 to 7). KIND is either BASE,
+     * LOCAL or STACK. BASE is used for types that are not relative to the input
+     * frame. LOCAL is used for types that are relative to the input local
+     * variable types. STACK is used for types that are relative to the input
+     * stack types. VALUE depends on KIND. For LOCAL types, it is an index in
+     * the input local variable types. For STACK types, it is a position
+     * relatively to the top of input frame stack. For BASE types, it is either
+     * one of the constants defined below, or for OBJECT and UNINITIALIZED
+     * types, a tag and an index in the type table.
+     * 
+     * Output frames can contain types of any kind and with a positive or
+     * negative dimension (and even unassigned types, represented by 0 - which
+     * does not correspond to any valid type value). Input frames can only
+     * contain BASE types of positive or null dimension. In all cases the type
+     * table contains only internal type names (array type descriptors are
+     * forbidden - dimensions must be represented through the DIM field).
+     * 
+     * The LONG and DOUBLE types are always represented by using two slots (LONG
+     * + TOP or DOUBLE + TOP), for local variable types as well as in the
+     * operand stack. This is necessary to be able to simulate DUPx_y
+     * instructions, whose effect would be dependent on the actual type values
+     * if types were always represented by a single slot in the stack (and this
+     * is not possible, since actual type values are not always known - cf LOCAL
+     * and STACK type kinds).
+     */
+
+    /**
+     * Mask to get the dimension of a frame type. This dimension is a signed
+     * integer between -8 and 7.
+     */
+    static final int DIM = 0xF0000000;
+
+    /**
+     * Constant to be added to a type to get a type with one more dimension.
+     */
+    static final int ARRAY_OF = 0x10000000;
+
+    /**
+     * Constant to be added to a type to get a type with one less dimension.
+     */
+    static final int ELEMENT_OF = 0xF0000000;
+
+    /**
+     * Mask to get the kind of a frame type.
+     *
+     * @see #BASE
+     * @see #LOCAL
+     * @see #STACK
+     */
+    static final int KIND = 0xF000000;
+
+    /**
+     * Flag used for LOCAL and STACK types. Indicates that if this type happens
+     * to be a long or double type (during the computations of input frames),
+     * then it must be set to TOP because the second word of this value has been
+     * reused to store other data in the basic block. Hence the first word no
+     * longer stores a valid long or double value.
+     */
+    static final int TOP_IF_LONG_OR_DOUBLE = 0x800000;
+
+    /**
+     * Mask to get the value of a frame type.
+     */
+    static final int VALUE = 0x7FFFFF;
+
+    /**
+     * Mask to get the kind of base types.
+     */
+    static final int BASE_KIND = 0xFF00000;
+
+    /**
+     * Mask to get the value of base types.
+     */
+    static final int BASE_VALUE = 0xFFFFF;
+
+    /**
+     * Kind of the types that are not relative to an input stack map frame.
+     */
+    static final int BASE = 0x1000000;
+
+    /**
+     * Base kind of the base reference types. The BASE_VALUE of such types is an
+     * index into the type table.
+     */
+    static final int OBJECT = BASE | 0x700000;
+
+    /**
+     * Base kind of the uninitialized base types. The BASE_VALUE of such types
+     * in an index into the type table (the Item at that index contains both an
+     * instruction offset and an internal class name).
+     */
+    static final int UNINITIALIZED = BASE | 0x800000;
+
+    /**
+     * Kind of the types that are relative to the local variable types of an
+     * input stack map frame. The value of such types is a local variable index.
+     */
+    private static final int LOCAL = 0x2000000;
+
+    /**
+     * Kind of the the types that are relative to the stack of an input stack
+     * map frame. The value of such types is a position relatively to the top of
+     * this stack.
+     */
+    private static final int STACK = 0x3000000;
+
+    /**
+     * The TOP type. This is a BASE type.
+     */
+    static final int TOP = BASE | 0;
+
+    /**
+     * The BOOLEAN type. This is a BASE type mainly used for array types.
+     */
+    static final int BOOLEAN = BASE | 9;
+
+    /**
+     * The BYTE type. This is a BASE type mainly used for array types.
+     */
+    static final int BYTE = BASE | 10;
+
+    /**
+     * The CHAR type. This is a BASE type mainly used for array types.
+     */
+    static final int CHAR = BASE | 11;
+
+    /**
+     * The SHORT type. This is a BASE type mainly used for array types.
+     */
+    static final int SHORT = BASE | 12;
+
+    /**
+     * The INTEGER type. This is a BASE type.
+     */
+    static final int INTEGER = BASE | 1;
+
+    /**
+     * The FLOAT type. This is a BASE type.
+     */
+    static final int FLOAT = BASE | 2;
+
+    /**
+     * The DOUBLE type. This is a BASE type.
+     */
+    static final int DOUBLE = BASE | 3;
+
+    /**
+     * The LONG type. This is a BASE type.
+     */
+    static final int LONG = BASE | 4;
+
+    /**
+     * The NULL type. This is a BASE type.
+     */
+    static final int NULL = BASE | 5;
+
+    /**
+     * The UNINITIALIZED_THIS type. This is a BASE type.
+     */
+    static final int UNINITIALIZED_THIS = BASE | 6;
+
+    /**
+     * The stack size variation corresponding to each JVM instruction. This
+     * stack variation is equal to the size of the values produced by an
+     * instruction, minus the size of the values consumed by this instruction.
+     */
+    static final int[] SIZE;
+
+    /**
+     * Computes the stack size variation corresponding to each JVM instruction.
+     */
+    static {
+        int i;
+        int[] b = new int[202];
+        String s = "EFFFFFFFFGGFFFGGFFFEEFGFGFEEEEEEEEEEEEEEEEEEEEDEDEDDDDD"
+                + "CDCDEEEEEEEEEEEEEEEEEEEEBABABBBBDCFFFGGGEDCDCDCDCDCDCDCDCD"
+                + "CDCEEEEDDDDDDDCDCDCEFEFDDEEFFDEDEEEBDDBBDDDDDDCCCCCCCCEFED"
+                + "DDCDCDEEEEEEEEEEFEEEEEEDDEEDDEE";
+        for (i = 0; i < b.length; ++i) {
+            b[i] = s.charAt(i) - 'E';
         }
-        int n2 = this.e[n];
-        if (n2 == 0) {
-            final int[] e = this.e;
-            final int n3 = 0x2000000 | n;
-            e[n] = n3;
-            n2 = n3;
-        }
-        return n2;
+        SIZE = b;
+
+        // code to generate the above string
+        //
+        // int NA = 0; // not applicable (unused opcode or variable size opcode)
+        //
+        // b = new int[] {
+        // 0, //NOP, // visitInsn
+        // 1, //ACONST_NULL, // -
+        // 1, //ICONST_M1, // -
+        // 1, //ICONST_0, // -
+        // 1, //ICONST_1, // -
+        // 1, //ICONST_2, // -
+        // 1, //ICONST_3, // -
+        // 1, //ICONST_4, // -
+        // 1, //ICONST_5, // -
+        // 2, //LCONST_0, // -
+        // 2, //LCONST_1, // -
+        // 1, //FCONST_0, // -
+        // 1, //FCONST_1, // -
+        // 1, //FCONST_2, // -
+        // 2, //DCONST_0, // -
+        // 2, //DCONST_1, // -
+        // 1, //BIPUSH, // visitIntInsn
+        // 1, //SIPUSH, // -
+        // 1, //LDC, // visitLdcInsn
+        // NA, //LDC_W, // -
+        // NA, //LDC2_W, // -
+        // 1, //ILOAD, // visitVarInsn
+        // 2, //LLOAD, // -
+        // 1, //FLOAD, // -
+        // 2, //DLOAD, // -
+        // 1, //ALOAD, // -
+        // NA, //ILOAD_0, // -
+        // NA, //ILOAD_1, // -
+        // NA, //ILOAD_2, // -
+        // NA, //ILOAD_3, // -
+        // NA, //LLOAD_0, // -
+        // NA, //LLOAD_1, // -
+        // NA, //LLOAD_2, // -
+        // NA, //LLOAD_3, // -
+        // NA, //FLOAD_0, // -
+        // NA, //FLOAD_1, // -
+        // NA, //FLOAD_2, // -
+        // NA, //FLOAD_3, // -
+        // NA, //DLOAD_0, // -
+        // NA, //DLOAD_1, // -
+        // NA, //DLOAD_2, // -
+        // NA, //DLOAD_3, // -
+        // NA, //ALOAD_0, // -
+        // NA, //ALOAD_1, // -
+        // NA, //ALOAD_2, // -
+        // NA, //ALOAD_3, // -
+        // -1, //IALOAD, // visitInsn
+        // 0, //LALOAD, // -
+        // -1, //FALOAD, // -
+        // 0, //DALOAD, // -
+        // -1, //AALOAD, // -
+        // -1, //BALOAD, // -
+        // -1, //CALOAD, // -
+        // -1, //SALOAD, // -
+        // -1, //ISTORE, // visitVarInsn
+        // -2, //LSTORE, // -
+        // -1, //FSTORE, // -
+        // -2, //DSTORE, // -
+        // -1, //ASTORE, // -
+        // NA, //ISTORE_0, // -
+        // NA, //ISTORE_1, // -
+        // NA, //ISTORE_2, // -
+        // NA, //ISTORE_3, // -
+        // NA, //LSTORE_0, // -
+        // NA, //LSTORE_1, // -
+        // NA, //LSTORE_2, // -
+        // NA, //LSTORE_3, // -
+        // NA, //FSTORE_0, // -
+        // NA, //FSTORE_1, // -
+        // NA, //FSTORE_2, // -
+        // NA, //FSTORE_3, // -
+        // NA, //DSTORE_0, // -
+        // NA, //DSTORE_1, // -
+        // NA, //DSTORE_2, // -
+        // NA, //DSTORE_3, // -
+        // NA, //ASTORE_0, // -
+        // NA, //ASTORE_1, // -
+        // NA, //ASTORE_2, // -
+        // NA, //ASTORE_3, // -
+        // -3, //IASTORE, // visitInsn
+        // -4, //LASTORE, // -
+        // -3, //FASTORE, // -
+        // -4, //DASTORE, // -
+        // -3, //AASTORE, // -
+        // -3, //BASTORE, // -
+        // -3, //CASTORE, // -
+        // -3, //SASTORE, // -
+        // -1, //POP, // -
+        // -2, //POP2, // -
+        // 1, //DUP, // -
+        // 1, //DUP_X1, // -
+        // 1, //DUP_X2, // -
+        // 2, //DUP2, // -
+        // 2, //DUP2_X1, // -
+        // 2, //DUP2_X2, // -
+        // 0, //SWAP, // -
+        // -1, //IADD, // -
+        // -2, //LADD, // -
+        // -1, //FADD, // -
+        // -2, //DADD, // -
+        // -1, //ISUB, // -
+        // -2, //LSUB, // -
+        // -1, //FSUB, // -
+        // -2, //DSUB, // -
+        // -1, //IMUL, // -
+        // -2, //LMUL, // -
+        // -1, //FMUL, // -
+        // -2, //DMUL, // -
+        // -1, //IDIV, // -
+        // -2, //LDIV, // -
+        // -1, //FDIV, // -
+        // -2, //DDIV, // -
+        // -1, //IREM, // -
+        // -2, //LREM, // -
+        // -1, //FREM, // -
+        // -2, //DREM, // -
+        // 0, //INEG, // -
+        // 0, //LNEG, // -
+        // 0, //FNEG, // -
+        // 0, //DNEG, // -
+        // -1, //ISHL, // -
+        // -1, //LSHL, // -
+        // -1, //ISHR, // -
+        // -1, //LSHR, // -
+        // -1, //IUSHR, // -
+        // -1, //LUSHR, // -
+        // -1, //IAND, // -
+        // -2, //LAND, // -
+        // -1, //IOR, // -
+        // -2, //LOR, // -
+        // -1, //IXOR, // -
+        // -2, //LXOR, // -
+        // 0, //IINC, // visitIincInsn
+        // 1, //I2L, // visitInsn
+        // 0, //I2F, // -
+        // 1, //I2D, // -
+        // -1, //L2I, // -
+        // -1, //L2F, // -
+        // 0, //L2D, // -
+        // 0, //F2I, // -
+        // 1, //F2L, // -
+        // 1, //F2D, // -
+        // -1, //D2I, // -
+        // 0, //D2L, // -
+        // -1, //D2F, // -
+        // 0, //I2B, // -
+        // 0, //I2C, // -
+        // 0, //I2S, // -
+        // -3, //LCMP, // -
+        // -1, //FCMPL, // -
+        // -1, //FCMPG, // -
+        // -3, //DCMPL, // -
+        // -3, //DCMPG, // -
+        // -1, //IFEQ, // visitJumpInsn
+        // -1, //IFNE, // -
+        // -1, //IFLT, // -
+        // -1, //IFGE, // -
+        // -1, //IFGT, // -
+        // -1, //IFLE, // -
+        // -2, //IF_ICMPEQ, // -
+        // -2, //IF_ICMPNE, // -
+        // -2, //IF_ICMPLT, // -
+        // -2, //IF_ICMPGE, // -
+        // -2, //IF_ICMPGT, // -
+        // -2, //IF_ICMPLE, // -
+        // -2, //IF_ACMPEQ, // -
+        // -2, //IF_ACMPNE, // -
+        // 0, //GOTO, // -
+        // 1, //JSR, // -
+        // 0, //RET, // visitVarInsn
+        // -1, //TABLESWITCH, // visiTableSwitchInsn
+        // -1, //LOOKUPSWITCH, // visitLookupSwitch
+        // -1, //IRETURN, // visitInsn
+        // -2, //LRETURN, // -
+        // -1, //FRETURN, // -
+        // -2, //DRETURN, // -
+        // -1, //ARETURN, // -
+        // 0, //RETURN, // -
+        // NA, //GETSTATIC, // visitFieldInsn
+        // NA, //PUTSTATIC, // -
+        // NA, //GETFIELD, // -
+        // NA, //PUTFIELD, // -
+        // NA, //INVOKEVIRTUAL, // visitMethodInsn
+        // NA, //INVOKESPECIAL, // -
+        // NA, //INVOKESTATIC, // -
+        // NA, //INVOKEINTERFACE, // -
+        // NA, //INVOKEDYNAMIC, // visitInvokeDynamicInsn
+        // 1, //NEW, // visitTypeInsn
+        // 0, //NEWARRAY, // visitIntInsn
+        // 0, //ANEWARRAY, // visitTypeInsn
+        // 0, //ARRAYLENGTH, // visitInsn
+        // NA, //ATHROW, // -
+        // 0, //CHECKCAST, // visitTypeInsn
+        // 0, //INSTANCEOF, // -
+        // -1, //MONITORENTER, // visitInsn
+        // -1, //MONITOREXIT, // -
+        // NA, //WIDE, // NOT VISITED
+        // NA, //MULTIANEWARRAY, // visitMultiANewArrayInsn
+        // -1, //IFNULL, // visitJumpInsn
+        // -1, //IFNONNULL, // -
+        // NA, //GOTO_W, // -
+        // NA, //JSR_W, // -
+        // };
+        // for (i = 0; i < b.length; ++i) {
+        // System.err.print((char)('E' + b[i]));
+        // }
+        // System.err.println();
     }
-    
-    private void a(final int n, final int n2) {
-        if (this.e == null) {
-            this.e = new int[10];
+
+    /**
+     * The label (i.e. basic block) to which these input and output stack map
+     * frames correspond.
+     */
+    Label owner;
+
+    /**
+     * The input stack map frame locals.
+     */
+    int[] inputLocals;
+
+    /**
+     * The input stack map frame stack.
+     */
+    int[] inputStack;
+
+    /**
+     * The output stack map frame locals.
+     */
+    private int[] outputLocals;
+
+    /**
+     * The output stack map frame stack.
+     */
+    private int[] outputStack;
+
+    /**
+     * Relative size of the output stack. The exact semantics of this field
+     * depends on the algorithm that is used.
+     *
+     * When only the maximum stack size is computed, this field is the size of
+     * the output stack relatively to the top of the input stack.
+     *
+     * When the stack map frames are completely computed, this field is the
+     * actual number of types in {@link #outputStack}.
+     */
+    private int outputStackTop;
+
+    /**
+     * Number of types that are initialized in the basic block.
+     *
+     * @see #initializations
+     */
+    private int initializationCount;
+
+    /**
+     * The types that are initialized in the basic block. A constructor
+     * invocation on an UNINITIALIZED or UNINITIALIZED_THIS type must replace
+     * <i>every occurence</i> of this type in the local variables and in the
+     * operand stack. This cannot be done during the first phase of the
+     * algorithm since, during this phase, the local variables and the operand
+     * stack are not completely computed. It is therefore necessary to store the
+     * types on which constructors are invoked in the basic block, in order to
+     * do this replacement during the second phase of the algorithm, where the
+     * frames are fully computed. Note that this array can contain types that
+     * are relative to input locals or to the input stack (see below for the
+     * description of the algorithm).
+     */
+    private int[] initializations;
+
+    /**
+     * Returns the output frame local variable type at the given index.
+     *
+     * @param local
+     *            the index of the local that must be returned.
+     * @return the output frame local variable type at the given index.
+     */
+    private int get(final int local) {
+        if (outputLocals == null || local >= outputLocals.length) {
+            // this local has never been assigned in this basic block,
+            // so it is still equal to its value in the input frame
+            return LOCAL | local;
+        } else {
+            int type = outputLocals[local];
+            if (type == 0) {
+                // this local has never been assigned in this basic block,
+                // so it is still equal to its value in the input frame
+                type = outputLocals[local] = LOCAL | local;
+            }
+            return type;
         }
-        final int length = this.e.length;
-        if (n >= length) {
-            final int[] e = new int[Math.max(n + 1, 2 * length)];
-            System.arraycopy(this.e, 0, e, 0, length);
-            this.e = e;
-        }
-        this.e[n] = n2;
     }
-    
-    private void b(final int n) {
-        if (this.f == null) {
-            this.f = new int[10];
+
+    /**
+     * Sets the output frame local variable type at the given index.
+     *
+     * @param local
+     *            the index of the local that must be set.
+     * @param type
+     *            the value of the local that must be set.
+     */
+    private void set(final int local, final int type) {
+        // creates and/or resizes the output local variables array if necessary
+        if (outputLocals == null) {
+            outputLocals = new int[10];
         }
-        final int length = this.f.length;
-        if (this.g >= length) {
-            final int[] f = new int[Math.max(this.g + 1, 2 * length)];
-            System.arraycopy(this.f, 0, f, 0, length);
-            this.f = f;
+        int n = outputLocals.length;
+        if (local >= n) {
+            int[] t = new int[Math.max(local + 1, 2 * n)];
+            System.arraycopy(outputLocals, 0, t, 0, n);
+            outputLocals = t;
         }
-        this.f[this.g++] = n;
-        final int g = this.b.f + this.g;
-        if (g > this.b.g) {
-            this.b.g = g;
+        // sets the local variable
+        outputLocals[local] = type;
+    }
+
+    /**
+     * Pushes a new type onto the output frame stack.
+     *
+     * @param type
+     *            the type that must be pushed.
+     */
+    private void push(final int type) {
+        // creates and/or resizes the output stack array if necessary
+        if (outputStack == null) {
+            outputStack = new int[10];
+        }
+        int n = outputStack.length;
+        if (outputStackTop >= n) {
+            int[] t = new int[Math.max(outputStackTop + 1, 2 * n)];
+            System.arraycopy(outputStack, 0, t, 0, n);
+            outputStack = t;
+        }
+        // pushes the type on the output stack
+        outputStack[outputStackTop++] = type;
+        // updates the maximun height reached by the output stack, if needed
+        int top = owner.inputStackTop + outputStackTop;
+        if (top > owner.outputStackMax) {
+            owner.outputStackMax = top;
         }
     }
-    
-    private void a(final ClassWriter classWriter, final String s) {
-        final int b = b(classWriter, s);
-        if (b != 0) {
-            this.b(b);
-            if (b == 16777220 || b == 16777219) {
-                this.b(16777216);
+
+    /**
+     * Pushes a new type onto the output frame stack.
+     *
+     * @param cw
+     *            the ClassWriter to which this label belongs.
+     * @param desc
+     *            the descriptor of the type to be pushed. Can also be a method
+     *            descriptor (in this case this method pushes its return type
+     *            onto the output frame stack).
+     */
+    private void push(final ClassWriter cw, final String desc) {
+        int type = type(cw, desc);
+        if (type != 0) {
+            push(type);
+            if (type == LONG || type == DOUBLE) {
+                push(TOP);
             }
         }
     }
-    
-    private static int b(final ClassWriter classWriter, final String s) {
-        final int n = (s.charAt(0) == '(') ? (s.indexOf(41) + 1) : 0;
-        switch (s.charAt(n)) {
-            case 'V': {
+
+    /**
+     * Returns the int encoding of the given type.
+     *
+     * @param cw
+     *            the ClassWriter to which this label belongs.
+     * @param desc
+     *            a type descriptor.
+     * @return the int encoding of the given type.
+     */
+    private static int type(final ClassWriter cw, final String desc) {
+        String t;
+        int index = desc.charAt(0) == '(' ? desc.indexOf(')') + 1 : 0;
+        switch (desc.charAt(index)) {
+            case 'V':
                 return 0;
-            }
-            case 'B':
+            case 'Z':
             case 'C':
-            case 'I':
+            case 'B':
             case 'S':
-            case 'Z': {
-                return 16777217;
-            }
-            case 'F': {
-                return 16777218;
-            }
-            case 'J': {
-                return 16777220;
-            }
-            case 'D': {
-                return 16777219;
-            }
-            case 'L': {
-                return 0x1700000 | classWriter.c(s.substring(n + 1, s.length() - 1));
-            }
-            default: {
-                int n2;
-                for (n2 = n + 1; s.charAt(n2) == '['; ++n2) {}
-                int n3 = 0;
-                switch (s.charAt(n2)) {
-                    case 'Z': {
-                        n3 = 16777225;
-                        break;
-                    }
-                    case 'C': {
-                        n3 = 16777227;
-                        break;
-                    }
-                    case 'B': {
-                        n3 = 16777226;
-                        break;
-                    }
-                    case 'S': {
-                        n3 = 16777228;
-                        break;
-                    }
-                    case 'I': {
-                        n3 = 16777217;
-                        break;
-                    }
-                    case 'F': {
-                        n3 = 16777218;
-                        break;
-                    }
-                    case 'J': {
-                        n3 = 16777220;
-                        break;
-                    }
-                    case 'D': {
-                        n3 = 16777219;
-                        break;
-                    }
-                    default: {
-                        n3 = (0x1700000 | classWriter.c(s.substring(n2 + 1, s.length() - 1)));
-                        break;
-                    }
+            case 'I':
+                return INTEGER;
+            case 'F':
+                return FLOAT;
+            case 'J':
+                return LONG;
+            case 'D':
+                return DOUBLE;
+            case 'L':
+                // stores the internal name, not the descriptor!
+                t = desc.substring(index + 1, desc.length() - 1);
+                return OBJECT | cw.addType(t);
+            // case '[':
+            default:
+                // extracts the dimensions and the element type
+                int data;
+                int dims = index + 1;
+                while (desc.charAt(dims) == '[') {
+                    ++dims;
                 }
-                return n2 - n << 28 | n3;
+                switch (desc.charAt(dims)) {
+                    case 'Z':
+                        data = BOOLEAN;
+                        break;
+                    case 'C':
+                        data = CHAR;
+                        break;
+                    case 'B':
+                        data = BYTE;
+                        break;
+                    case 'S':
+                        data = SHORT;
+                        break;
+                    case 'I':
+                        data = INTEGER;
+                        break;
+                    case 'F':
+                        data = FLOAT;
+                        break;
+                    case 'J':
+                        data = LONG;
+                        break;
+                    case 'D':
+                        data = DOUBLE;
+                        break;
+                    // case 'L':
+                    default:
+                        // stores the internal name, not the descriptor
+                        t = desc.substring(dims + 1, desc.length() - 1);
+                        data = OBJECT | cw.addType(t);
+                }
+                return (dims - index) << 28 | data;
+        }
+    }
+
+    /**
+     * Pops a type from the output frame stack and returns its value.
+     *
+     * @return the type that has been popped from the output frame stack.
+     */
+    private int pop() {
+        if (outputStackTop > 0) {
+            return outputStack[--outputStackTop];
+        } else {
+            // if the output frame stack is empty, pops from the input stack
+            return STACK | -(--owner.inputStackTop);
+        }
+    }
+
+    /**
+     * Pops the given number of types from the output frame stack.
+     *
+     * @param elements
+     *            the number of types that must be popped.
+     */
+    private void pop(final int elements) {
+        if (outputStackTop >= elements) {
+            outputStackTop -= elements;
+        } else {
+            // if the number of elements to be popped is greater than the number
+            // of elements in the output stack, clear it, and pops the remaining
+            // elements from the input stack.
+            owner.inputStackTop -= elements - outputStackTop;
+            outputStackTop = 0;
+        }
+    }
+
+    /**
+     * Pops a type from the output frame stack.
+     *
+     * @param desc
+     *            the descriptor of the type to be popped. Can also be a method
+     *            descriptor (in this case this method pops the types
+     *            corresponding to the method arguments).
+     */
+    private void pop(final String desc) {
+        char c = desc.charAt(0);
+        if (c == '(') {
+            pop((Type.getArgumentsAndReturnSizes(desc) >> 2) - 1);
+        } else if (c == 'J' || c == 'D') {
+            pop(2);
+        } else {
+            pop(1);
+        }
+    }
+
+    /**
+     * Adds a new type to the list of types on which a constructor is invoked in
+     * the basic block.
+     *
+     * @param var
+     *            a type on a which a constructor is invoked.
+     */
+    private void init(final int var) {
+        // creates and/or resizes the initializations array if necessary
+        if (initializations == null) {
+            initializations = new int[2];
+        }
+        int n = initializations.length;
+        if (initializationCount >= n) {
+            int[] t = new int[Math.max(initializationCount + 1, 2 * n)];
+            System.arraycopy(initializations, 0, t, 0, n);
+            initializations = t;
+        }
+        // stores the type to be initialized
+        initializations[initializationCount++] = var;
+    }
+
+    /**
+     * Replaces the given type with the appropriate type if it is one of the
+     * types on which a constructor is invoked in the basic block.
+     *
+     * @param cw
+     *            the ClassWriter to which this label belongs.
+     * @param t
+     *            a type
+     * @return t or, if t is one of the types on which a constructor is invoked
+     *         in the basic block, the type corresponding to this constructor.
+     */
+    private int init(final ClassWriter cw, final int t) {
+        int s;
+        if (t == UNINITIALIZED_THIS) {
+            s = OBJECT | cw.addType(cw.thisName);
+        } else if ((t & (DIM | BASE_KIND)) == UNINITIALIZED) {
+            String type = cw.typeTable[t & BASE_VALUE].strVal1;
+            s = OBJECT | cw.addType(type);
+        } else {
+            return t;
+        }
+        for (int j = 0; j < initializationCount; ++j) {
+            int u = initializations[j];
+            int dim = u & DIM;
+            int kind = u & KIND;
+            if (kind == LOCAL) {
+                u = dim + inputLocals[u & VALUE];
+            } else if (kind == STACK) {
+                u = dim + inputStack[inputStack.length - (u & VALUE)];
+            }
+            if (t == u) {
+                return s;
             }
         }
+        return t;
     }
-    
-    private int a() {
-        if (this.g > 0) {
-            final int[] f = this.f;
-            final int g = this.g - 1;
-            this.g = g;
-            return f[g];
-        }
-        final int n = 50331648;
-        final Label b = this.b;
-        return n | -(--b.f);
-    }
-    
-    private void c(final int n) {
-        if (this.g >= n) {
-            this.g -= n;
-        }
-        else {
-            final Label b = this.b;
-            b.f -= n - this.g;
-            this.g = 0;
-        }
-    }
-    
-    private void a(final String s) {
-        final char char1 = s.charAt(0);
-        if (char1 == '(') {
-            this.c((Type.getArgumentsAndReturnSizes(s) >> 2) - 1);
-        }
-        else if (char1 == 'J' || char1 == 'D') {
-            this.c(2);
-        }
-        else {
-            this.c(1);
-        }
-    }
-    
-    private void d(final int n) {
-        if (this.i == null) {
-            this.i = new int[2];
-        }
-        final int length = this.i.length;
-        if (this.h >= length) {
-            final int[] i = new int[Math.max(this.h + 1, 2 * length)];
-            System.arraycopy(this.i, 0, i, 0, length);
-            this.i = i;
-        }
-        this.i[this.h++] = n;
-    }
-    
-    private int a(final ClassWriter classWriter, final int n) {
-        int n2;
-        if (n == 16777222) {
-            n2 = (0x1700000 | classWriter.c(classWriter.I));
-        }
-        else {
-            if ((n & 0xFFF00000) != 0x1800000) {
-                return n;
-            }
-            n2 = (0x1700000 | classWriter.c(classWriter.H[n & 0xFFFFF].g));
-        }
-        for (int i = 0; i < this.h; ++i) {
-            int n3 = this.i[i];
-            final int n4 = n3 & 0xF0000000;
-            final int n5 = n3 & 0xF000000;
-            if (n5 == 33554432) {
-                n3 = n4 + this.c[n3 & 0x7FFFFF];
-            }
-            else if (n5 == 50331648) {
-                n3 = n4 + this.d[this.d.length - (n3 & 0x7FFFFF)];
-            }
-            if (n == n3) {
-                return n2;
-            }
-        }
-        return n;
-    }
-    
-    void a(final ClassWriter classWriter, final int n, final Type[] array, final int n2) {
-        this.c = new int[n2];
-        this.d = new int[0];
+
+    /**
+     * Initializes the input frame of the first basic block from the method
+     * descriptor.
+     *
+     * @param cw
+     *            the ClassWriter to which this label belongs.
+     * @param access
+     *            the access flags of the method to which this label belongs.
+     * @param args
+     *            the formal parameter types of this method.
+     * @param maxLocals
+     *            the maximum number of local variables of this method.
+     */
+    void initInputFrame(final ClassWriter cw, final int access,
+                        final Type[] args, final int maxLocals) {
+        inputLocals = new int[maxLocals];
+        inputStack = new int[0];
         int i = 0;
-        if ((n & 0x8) == 0x0) {
-            if ((n & 0x80000) == 0x0) {
-                this.c[i++] = (0x1700000 | classWriter.c(classWriter.I));
-            }
-            else {
-                this.c[i++] = 16777222;
-            }
-        }
-        for (int j = 0; j < array.length; ++j) {
-            final int b = b(classWriter, array[j].getDescriptor());
-            this.c[i++] = b;
-            if (b == 16777220 || b == 16777219) {
-                this.c[i++] = 16777216;
+        if ((access & Opcodes.ACC_STATIC) == 0) {
+            if ((access & MethodWriter.ACC_CONSTRUCTOR) == 0) {
+                inputLocals[i++] = OBJECT | cw.addType(cw.thisName);
+            } else {
+                inputLocals[i++] = UNINITIALIZED_THIS;
             }
         }
-        while (i < n2) {
-            this.c[i++] = 16777216;
-        }
-    }
-    
-    void a(final int n, final int n2, final ClassWriter classWriter, final Item item) {
-        Label_2251: {
-            switch (n) {
-                case 0:
-                case 116:
-                case 117:
-                case 118:
-                case 119:
-                case 145:
-                case 146:
-                case 147:
-                case 167:
-                case 177: {
-                    break;
-                }
-                case 1: {
-                    this.b(16777221);
-                    break;
-                }
-                case 2:
-                case 3:
-                case 4:
-                case 5:
-                case 6:
-                case 7:
-                case 8:
-                case 16:
-                case 17:
-                case 21: {
-                    this.b(16777217);
-                    break;
-                }
-                case 9:
-                case 10:
-                case 22: {
-                    this.b(16777220);
-                    this.b(16777216);
-                    break;
-                }
-                case 11:
-                case 12:
-                case 13:
-                case 23: {
-                    this.b(16777218);
-                    break;
-                }
-                case 14:
-                case 15:
-                case 24: {
-                    this.b(16777219);
-                    this.b(16777216);
-                    break;
-                }
-                case 18: {
-                    switch (item.b) {
-                        case 3: {
-                            this.b(16777217);
-                            break Label_2251;
-                        }
-                        case 5: {
-                            this.b(16777220);
-                            this.b(16777216);
-                            break Label_2251;
-                        }
-                        case 4: {
-                            this.b(16777218);
-                            break Label_2251;
-                        }
-                        case 6: {
-                            this.b(16777219);
-                            this.b(16777216);
-                            break Label_2251;
-                        }
-                        case 7: {
-                            this.b(0x1700000 | classWriter.c("java/lang/Class"));
-                            break Label_2251;
-                        }
-                        case 8: {
-                            this.b(0x1700000 | classWriter.c("java/lang/String"));
-                            break Label_2251;
-                        }
-                        case 16: {
-                            this.b(0x1700000 | classWriter.c("java/lang/invoke/MethodType"));
-                            break Label_2251;
-                        }
-                        default: {
-                            this.b(0x1700000 | classWriter.c("java/lang/invoke/MethodHandle"));
-                            break Label_2251;
-                        }
-                    }
-                    break;
-                }
-                case 25: {
-                    this.b(this.a(n2));
-                    break;
-                }
-                case 46:
-                case 51:
-                case 52:
-                case 53: {
-                    this.c(2);
-                    this.b(16777217);
-                    break;
-                }
-                case 47:
-                case 143: {
-                    this.c(2);
-                    this.b(16777220);
-                    this.b(16777216);
-                    break;
-                }
-                case 48: {
-                    this.c(2);
-                    this.b(16777218);
-                    break;
-                }
-                case 49:
-                case 138: {
-                    this.c(2);
-                    this.b(16777219);
-                    this.b(16777216);
-                    break;
-                }
-                case 50: {
-                    this.c(1);
-                    this.b(-268435456 + this.a());
-                    break;
-                }
-                case 54:
-                case 56:
-                case 58: {
-                    this.a(n2, this.a());
-                    if (n2 <= 0) {
-                        break;
-                    }
-                    final int a = this.a(n2 - 1);
-                    if (a == 16777220 || a == 16777219) {
-                        this.a(n2 - 1, 16777216);
-                        break;
-                    }
-                    if ((a & 0xF000000) != 0x1000000) {
-                        this.a(n2 - 1, a | 0x800000);
-                        break;
-                    }
-                    break;
-                }
-                case 55:
-                case 57: {
-                    this.c(1);
-                    this.a(n2, this.a());
-                    this.a(n2 + 1, 16777216);
-                    if (n2 <= 0) {
-                        break;
-                    }
-                    final int a2 = this.a(n2 - 1);
-                    if (a2 == 16777220 || a2 == 16777219) {
-                        this.a(n2 - 1, 16777216);
-                        break;
-                    }
-                    if ((a2 & 0xF000000) != 0x1000000) {
-                        this.a(n2 - 1, a2 | 0x800000);
-                        break;
-                    }
-                    break;
-                }
-                case 79:
-                case 81:
-                case 83:
-                case 84:
-                case 85:
-                case 86: {
-                    this.c(3);
-                    break;
-                }
-                case 80:
-                case 82: {
-                    this.c(4);
-                    break;
-                }
-                case 87:
-                case 153:
-                case 154:
-                case 155:
-                case 156:
-                case 157:
-                case 158:
-                case 170:
-                case 171:
-                case 172:
-                case 174:
-                case 176:
-                case 191:
-                case 194:
-                case 195:
-                case 198:
-                case 199: {
-                    this.c(1);
-                    break;
-                }
-                case 88:
-                case 159:
-                case 160:
-                case 161:
-                case 162:
-                case 163:
-                case 164:
-                case 165:
-                case 166:
-                case 173:
-                case 175: {
-                    this.c(2);
-                    break;
-                }
-                case 89: {
-                    final int a3 = this.a();
-                    this.b(a3);
-                    this.b(a3);
-                    break;
-                }
-                case 90: {
-                    final int a4 = this.a();
-                    final int a5 = this.a();
-                    this.b(a4);
-                    this.b(a5);
-                    this.b(a4);
-                    break;
-                }
-                case 91: {
-                    final int a6 = this.a();
-                    final int a7 = this.a();
-                    final int a8 = this.a();
-                    this.b(a6);
-                    this.b(a8);
-                    this.b(a7);
-                    this.b(a6);
-                    break;
-                }
-                case 92: {
-                    final int a9 = this.a();
-                    final int a10 = this.a();
-                    this.b(a10);
-                    this.b(a9);
-                    this.b(a10);
-                    this.b(a9);
-                    break;
-                }
-                case 93: {
-                    final int a11 = this.a();
-                    final int a12 = this.a();
-                    final int a13 = this.a();
-                    this.b(a12);
-                    this.b(a11);
-                    this.b(a13);
-                    this.b(a12);
-                    this.b(a11);
-                    break;
-                }
-                case 94: {
-                    final int a14 = this.a();
-                    final int a15 = this.a();
-                    final int a16 = this.a();
-                    final int a17 = this.a();
-                    this.b(a15);
-                    this.b(a14);
-                    this.b(a17);
-                    this.b(a16);
-                    this.b(a15);
-                    this.b(a14);
-                    break;
-                }
-                case 95: {
-                    final int a18 = this.a();
-                    final int a19 = this.a();
-                    this.b(a18);
-                    this.b(a19);
-                    break;
-                }
-                case 96:
-                case 100:
-                case 104:
-                case 108:
-                case 112:
-                case 120:
-                case 122:
-                case 124:
-                case 126:
-                case 128:
-                case 130:
-                case 136:
-                case 142:
-                case 149:
-                case 150: {
-                    this.c(2);
-                    this.b(16777217);
-                    break;
-                }
-                case 97:
-                case 101:
-                case 105:
-                case 109:
-                case 113:
-                case 127:
-                case 129:
-                case 131: {
-                    this.c(4);
-                    this.b(16777220);
-                    this.b(16777216);
-                    break;
-                }
-                case 98:
-                case 102:
-                case 106:
-                case 110:
-                case 114:
-                case 137:
-                case 144: {
-                    this.c(2);
-                    this.b(16777218);
-                    break;
-                }
-                case 99:
-                case 103:
-                case 107:
-                case 111:
-                case 115: {
-                    this.c(4);
-                    this.b(16777219);
-                    this.b(16777216);
-                    break;
-                }
-                case 121:
-                case 123:
-                case 125: {
-                    this.c(3);
-                    this.b(16777220);
-                    this.b(16777216);
-                    break;
-                }
-                case 132: {
-                    this.a(n2, 16777217);
-                    break;
-                }
-                case 133:
-                case 140: {
-                    this.c(1);
-                    this.b(16777220);
-                    this.b(16777216);
-                    break;
-                }
-                case 134: {
-                    this.c(1);
-                    this.b(16777218);
-                    break;
-                }
-                case 135:
-                case 141: {
-                    this.c(1);
-                    this.b(16777219);
-                    this.b(16777216);
-                    break;
-                }
-                case 139:
-                case 190:
-                case 193: {
-                    this.c(1);
-                    this.b(16777217);
-                    break;
-                }
-                case 148:
-                case 151:
-                case 152: {
-                    this.c(4);
-                    this.b(16777217);
-                    break;
-                }
-                case 168:
-                case 169: {
-                    throw new RuntimeException("JSR/RET are not supported with computeFrames option");
-                }
-                case 178: {
-                    this.a(classWriter, item.i);
-                    break;
-                }
-                case 179: {
-                    this.a(item.i);
-                    break;
-                }
-                case 180: {
-                    this.c(1);
-                    this.a(classWriter, item.i);
-                    break;
-                }
-                case 181: {
-                    this.a(item.i);
-                    this.a();
-                    break;
-                }
-                case 182:
-                case 183:
-                case 184:
-                case 185: {
-                    this.a(item.i);
-                    if (n != 184) {
-                        final int a20 = this.a();
-                        if (n == 183 && item.h.charAt(0) == '<') {
-                            this.d(a20);
-                        }
-                    }
-                    this.a(classWriter, item.i);
-                    break;
-                }
-                case 186: {
-                    this.a(item.h);
-                    this.a(classWriter, item.h);
-                    break;
-                }
-                case 187: {
-                    this.b(0x1800000 | classWriter.a(item.g, n2));
-                    break;
-                }
-                case 188: {
-                    this.a();
-                    switch (n2) {
-                        case 4: {
-                            this.b(285212681);
-                            break Label_2251;
-                        }
-                        case 5: {
-                            this.b(285212683);
-                            break Label_2251;
-                        }
-                        case 8: {
-                            this.b(285212682);
-                            break Label_2251;
-                        }
-                        case 9: {
-                            this.b(285212684);
-                            break Label_2251;
-                        }
-                        case 10: {
-                            this.b(285212673);
-                            break Label_2251;
-                        }
-                        case 6: {
-                            this.b(285212674);
-                            break Label_2251;
-                        }
-                        case 7: {
-                            this.b(285212675);
-                            break Label_2251;
-                        }
-                        default: {
-                            this.b(285212676);
-                            break Label_2251;
-                        }
-                    }
-                    break;
-                }
-                case 189: {
-                    final String g = item.g;
-                    this.a();
-                    if (g.charAt(0) == '[') {
-                        this.a(classWriter, '[' + g);
-                        break;
-                    }
-                    this.b(0x11700000 | classWriter.c(g));
-                    break;
-                }
-                case 192: {
-                    final String g2 = item.g;
-                    this.a();
-                    if (g2.charAt(0) == '[') {
-                        this.a(classWriter, g2);
-                        break;
-                    }
-                    this.b(0x1700000 | classWriter.c(g2));
-                    break;
-                }
-                default: {
-                    this.c(n2);
-                    this.a(classWriter, item.g);
-                    break;
-                }
+        for (int j = 0; j < args.length; ++j) {
+            int t = type(cw, args[j].getDescriptor());
+            inputLocals[i++] = t;
+            if (t == LONG || t == DOUBLE) {
+                inputLocals[i++] = TOP;
             }
+        }
+        while (i < maxLocals) {
+            inputLocals[i++] = TOP;
         }
     }
-    
-    boolean a(final ClassWriter classWriter, final Frame frame, final int n) {
-        boolean b = false;
-        final int length = this.c.length;
-        final int length2 = this.d.length;
-        if (frame.c == null) {
-            frame.c = new int[length];
-            b = true;
-        }
-        for (int i = 0; i < length; ++i) {
-            int a;
-            if (this.e != null && i < this.e.length) {
-                final int n2 = this.e[i];
-                if (n2 == 0) {
-                    a = this.c[i];
+
+    /**
+     * Simulates the action of the given instruction on the output stack frame.
+     *
+     * @param opcode
+     *            the opcode of the instruction.
+     * @param arg
+     *            the operand of the instruction, if any.
+     * @param cw
+     *            the class writer to which this label belongs.
+     * @param item
+     *            the operand of the instructions, if any.
+     */
+    void execute(final int opcode, final int arg, final ClassWriter cw,
+                 final Item item) {
+        int t1, t2, t3, t4;
+        switch (opcode) {
+            case Opcodes.NOP:
+            case Opcodes.INEG:
+            case Opcodes.LNEG:
+            case Opcodes.FNEG:
+            case Opcodes.DNEG:
+            case Opcodes.I2B:
+            case Opcodes.I2C:
+            case Opcodes.I2S:
+            case Opcodes.GOTO:
+            case Opcodes.RETURN:
+                break;
+            case Opcodes.ACONST_NULL:
+                push(NULL);
+                break;
+            case Opcodes.ICONST_M1:
+            case Opcodes.ICONST_0:
+            case Opcodes.ICONST_1:
+            case Opcodes.ICONST_2:
+            case Opcodes.ICONST_3:
+            case Opcodes.ICONST_4:
+            case Opcodes.ICONST_5:
+            case Opcodes.BIPUSH:
+            case Opcodes.SIPUSH:
+            case Opcodes.ILOAD:
+                push(INTEGER);
+                break;
+            case Opcodes.LCONST_0:
+            case Opcodes.LCONST_1:
+            case Opcodes.LLOAD:
+                push(LONG);
+                push(TOP);
+                break;
+            case Opcodes.FCONST_0:
+            case Opcodes.FCONST_1:
+            case Opcodes.FCONST_2:
+            case Opcodes.FLOAD:
+                push(FLOAT);
+                break;
+            case Opcodes.DCONST_0:
+            case Opcodes.DCONST_1:
+            case Opcodes.DLOAD:
+                push(DOUBLE);
+                push(TOP);
+                break;
+            case Opcodes.LDC:
+                switch (item.type) {
+                    case ClassWriter.INT:
+                        push(INTEGER);
+                        break;
+                    case ClassWriter.LONG:
+                        push(LONG);
+                        push(TOP);
+                        break;
+                    case ClassWriter.FLOAT:
+                        push(FLOAT);
+                        break;
+                    case ClassWriter.DOUBLE:
+                        push(DOUBLE);
+                        push(TOP);
+                        break;
+                    case ClassWriter.CLASS:
+                        push(OBJECT | cw.addType("java/lang/Class"));
+                        break;
+                    case ClassWriter.STR:
+                        push(OBJECT | cw.addType("java/lang/String"));
+                        break;
+                    case ClassWriter.MTYPE:
+                        push(OBJECT | cw.addType("java/lang/invoke/MethodType"));
+                        break;
+                    // case ClassWriter.HANDLE_BASE + [1..9]:
+                    default:
+                        push(OBJECT | cw.addType("java/lang/invoke/MethodHandle"));
                 }
-                else {
-                    final int n3 = n2 & 0xF0000000;
-                    final int n4 = n2 & 0xF000000;
-                    if (n4 == 16777216) {
-                        a = n2;
+                break;
+            case Opcodes.ALOAD:
+                push(get(arg));
+                break;
+            case Opcodes.IALOAD:
+            case Opcodes.BALOAD:
+            case Opcodes.CALOAD:
+            case Opcodes.SALOAD:
+                pop(2);
+                push(INTEGER);
+                break;
+            case Opcodes.LALOAD:
+            case Opcodes.D2L:
+                pop(2);
+                push(LONG);
+                push(TOP);
+                break;
+            case Opcodes.FALOAD:
+                pop(2);
+                push(FLOAT);
+                break;
+            case Opcodes.DALOAD:
+            case Opcodes.L2D:
+                pop(2);
+                push(DOUBLE);
+                push(TOP);
+                break;
+            case Opcodes.AALOAD:
+                pop(1);
+                t1 = pop();
+                push(ELEMENT_OF + t1);
+                break;
+            case Opcodes.ISTORE:
+            case Opcodes.FSTORE:
+            case Opcodes.ASTORE:
+                t1 = pop();
+                set(arg, t1);
+                if (arg > 0) {
+                    t2 = get(arg - 1);
+                    // if t2 is of kind STACK or LOCAL we cannot know its size!
+                    if (t2 == LONG || t2 == DOUBLE) {
+                        set(arg - 1, TOP);
+                    } else if ((t2 & KIND) != BASE) {
+                        set(arg - 1, t2 | TOP_IF_LONG_OR_DOUBLE);
                     }
-                    else {
-                        if (n4 == 33554432) {
-                            a = n3 + this.c[n2 & 0x7FFFFF];
-                        }
-                        else {
-                            a = n3 + this.d[length2 - (n2 & 0x7FFFFF)];
-                        }
-                        if ((n2 & 0x800000) != 0x0 && (a == 16777220 || a == 16777219)) {
-                            a = 16777216;
-                        }
+                }
+                break;
+            case Opcodes.LSTORE:
+            case Opcodes.DSTORE:
+                pop(1);
+                t1 = pop();
+                set(arg, t1);
+                set(arg + 1, TOP);
+                if (arg > 0) {
+                    t2 = get(arg - 1);
+                    // if t2 is of kind STACK or LOCAL we cannot know its size!
+                    if (t2 == LONG || t2 == DOUBLE) {
+                        set(arg - 1, TOP);
+                    } else if ((t2 & KIND) != BASE) {
+                        set(arg - 1, t2 | TOP_IF_LONG_OR_DOUBLE);
                     }
                 }
-            }
-            else {
-                a = this.c[i];
-            }
-            if (this.i != null) {
-                a = this.a(classWriter, a);
-            }
-            b |= a(classWriter, a, frame.c, i);
-        }
-        if (n > 0) {
-            for (int j = 0; j < length; ++j) {
-                b |= a(classWriter, this.c[j], frame.c, j);
-            }
-            if (frame.d == null) {
-                frame.d = new int[1];
-                b = true;
-            }
-            return b | a(classWriter, n, frame.d, 0);
-        }
-        final int n5 = this.d.length + this.b.f;
-        if (frame.d == null) {
-            frame.d = new int[n5 + this.g];
-            b = true;
-        }
-        for (int k = 0; k < n5; ++k) {
-            int a2 = this.d[k];
-            if (this.i != null) {
-                a2 = this.a(classWriter, a2);
-            }
-            b |= a(classWriter, a2, frame.d, k);
-        }
-        for (int l = 0; l < this.g; ++l) {
-            final int n6 = this.f[l];
-            final int n7 = n6 & 0xF0000000;
-            final int n8 = n6 & 0xF000000;
-            int a3;
-            if (n8 == 16777216) {
-                a3 = n6;
-            }
-            else {
-                if (n8 == 33554432) {
-                    a3 = n7 + this.c[n6 & 0x7FFFFF];
+                break;
+            case Opcodes.IASTORE:
+            case Opcodes.BASTORE:
+            case Opcodes.CASTORE:
+            case Opcodes.SASTORE:
+            case Opcodes.FASTORE:
+            case Opcodes.AASTORE:
+                pop(3);
+                break;
+            case Opcodes.LASTORE:
+            case Opcodes.DASTORE:
+                pop(4);
+                break;
+            case Opcodes.POP:
+            case Opcodes.IFEQ:
+            case Opcodes.IFNE:
+            case Opcodes.IFLT:
+            case Opcodes.IFGE:
+            case Opcodes.IFGT:
+            case Opcodes.IFLE:
+            case Opcodes.IRETURN:
+            case Opcodes.FRETURN:
+            case Opcodes.ARETURN:
+            case Opcodes.TABLESWITCH:
+            case Opcodes.LOOKUPSWITCH:
+            case Opcodes.ATHROW:
+            case Opcodes.MONITORENTER:
+            case Opcodes.MONITOREXIT:
+            case Opcodes.IFNULL:
+            case Opcodes.IFNONNULL:
+                pop(1);
+                break;
+            case Opcodes.POP2:
+            case Opcodes.IF_ICMPEQ:
+            case Opcodes.IF_ICMPNE:
+            case Opcodes.IF_ICMPLT:
+            case Opcodes.IF_ICMPGE:
+            case Opcodes.IF_ICMPGT:
+            case Opcodes.IF_ICMPLE:
+            case Opcodes.IF_ACMPEQ:
+            case Opcodes.IF_ACMPNE:
+            case Opcodes.LRETURN:
+            case Opcodes.DRETURN:
+                pop(2);
+                break;
+            case Opcodes.DUP:
+                t1 = pop();
+                push(t1);
+                push(t1);
+                break;
+            case Opcodes.DUP_X1:
+                t1 = pop();
+                t2 = pop();
+                push(t1);
+                push(t2);
+                push(t1);
+                break;
+            case Opcodes.DUP_X2:
+                t1 = pop();
+                t2 = pop();
+                t3 = pop();
+                push(t1);
+                push(t3);
+                push(t2);
+                push(t1);
+                break;
+            case Opcodes.DUP2:
+                t1 = pop();
+                t2 = pop();
+                push(t2);
+                push(t1);
+                push(t2);
+                push(t1);
+                break;
+            case Opcodes.DUP2_X1:
+                t1 = pop();
+                t2 = pop();
+                t3 = pop();
+                push(t2);
+                push(t1);
+                push(t3);
+                push(t2);
+                push(t1);
+                break;
+            case Opcodes.DUP2_X2:
+                t1 = pop();
+                t2 = pop();
+                t3 = pop();
+                t4 = pop();
+                push(t2);
+                push(t1);
+                push(t4);
+                push(t3);
+                push(t2);
+                push(t1);
+                break;
+            case Opcodes.SWAP:
+                t1 = pop();
+                t2 = pop();
+                push(t1);
+                push(t2);
+                break;
+            case Opcodes.IADD:
+            case Opcodes.ISUB:
+            case Opcodes.IMUL:
+            case Opcodes.IDIV:
+            case Opcodes.IREM:
+            case Opcodes.IAND:
+            case Opcodes.IOR:
+            case Opcodes.IXOR:
+            case Opcodes.ISHL:
+            case Opcodes.ISHR:
+            case Opcodes.IUSHR:
+            case Opcodes.L2I:
+            case Opcodes.D2I:
+            case Opcodes.FCMPL:
+            case Opcodes.FCMPG:
+                pop(2);
+                push(INTEGER);
+                break;
+            case Opcodes.LADD:
+            case Opcodes.LSUB:
+            case Opcodes.LMUL:
+            case Opcodes.LDIV:
+            case Opcodes.LREM:
+            case Opcodes.LAND:
+            case Opcodes.LOR:
+            case Opcodes.LXOR:
+                pop(4);
+                push(LONG);
+                push(TOP);
+                break;
+            case Opcodes.FADD:
+            case Opcodes.FSUB:
+            case Opcodes.FMUL:
+            case Opcodes.FDIV:
+            case Opcodes.FREM:
+            case Opcodes.L2F:
+            case Opcodes.D2F:
+                pop(2);
+                push(FLOAT);
+                break;
+            case Opcodes.DADD:
+            case Opcodes.DSUB:
+            case Opcodes.DMUL:
+            case Opcodes.DDIV:
+            case Opcodes.DREM:
+                pop(4);
+                push(DOUBLE);
+                push(TOP);
+                break;
+            case Opcodes.LSHL:
+            case Opcodes.LSHR:
+            case Opcodes.LUSHR:
+                pop(3);
+                push(LONG);
+                push(TOP);
+                break;
+            case Opcodes.IINC:
+                set(arg, INTEGER);
+                break;
+            case Opcodes.I2L:
+            case Opcodes.F2L:
+                pop(1);
+                push(LONG);
+                push(TOP);
+                break;
+            case Opcodes.I2F:
+                pop(1);
+                push(FLOAT);
+                break;
+            case Opcodes.I2D:
+            case Opcodes.F2D:
+                pop(1);
+                push(DOUBLE);
+                push(TOP);
+                break;
+            case Opcodes.F2I:
+            case Opcodes.ARRAYLENGTH:
+            case Opcodes.INSTANCEOF:
+                pop(1);
+                push(INTEGER);
+                break;
+            case Opcodes.LCMP:
+            case Opcodes.DCMPL:
+            case Opcodes.DCMPG:
+                pop(4);
+                push(INTEGER);
+                break;
+            case Opcodes.JSR:
+            case Opcodes.RET:
+                throw new RuntimeException(
+                        "JSR/RET are not supported with computeFrames option");
+            case Opcodes.GETSTATIC:
+                push(cw, item.strVal3);
+                break;
+            case Opcodes.PUTSTATIC:
+                pop(item.strVal3);
+                break;
+            case Opcodes.GETFIELD:
+                pop(1);
+                push(cw, item.strVal3);
+                break;
+            case Opcodes.PUTFIELD:
+                pop(item.strVal3);
+                pop();
+                break;
+            case Opcodes.INVOKEVIRTUAL:
+            case Opcodes.INVOKESPECIAL:
+            case Opcodes.INVOKESTATIC:
+            case Opcodes.INVOKEINTERFACE:
+                pop(item.strVal3);
+                if (opcode != Opcodes.INVOKESTATIC) {
+                    t1 = pop();
+                    if (opcode == Opcodes.INVOKESPECIAL
+                            && item.strVal2.charAt(0) == '<') {
+                        init(t1);
+                    }
                 }
-                else {
-                    a3 = n7 + this.d[length2 - (n6 & 0x7FFFFF)];
+                push(cw, item.strVal3);
+                break;
+            case Opcodes.INVOKEDYNAMIC:
+                pop(item.strVal2);
+                push(cw, item.strVal2);
+                break;
+            case Opcodes.NEW:
+                push(UNINITIALIZED | cw.addUninitializedType(item.strVal1, arg));
+                break;
+            case Opcodes.NEWARRAY:
+                pop();
+                switch (arg) {
+                    case Opcodes.T_BOOLEAN:
+                        push(ARRAY_OF | BOOLEAN);
+                        break;
+                    case Opcodes.T_CHAR:
+                        push(ARRAY_OF | CHAR);
+                        break;
+                    case Opcodes.T_BYTE:
+                        push(ARRAY_OF | BYTE);
+                        break;
+                    case Opcodes.T_SHORT:
+                        push(ARRAY_OF | SHORT);
+                        break;
+                    case Opcodes.T_INT:
+                        push(ARRAY_OF | INTEGER);
+                        break;
+                    case Opcodes.T_FLOAT:
+                        push(ARRAY_OF | FLOAT);
+                        break;
+                    case Opcodes.T_DOUBLE:
+                        push(ARRAY_OF | DOUBLE);
+                        break;
+                    // case Opcodes.T_LONG:
+                    default:
+                        push(ARRAY_OF | LONG);
+                        break;
                 }
-                if ((n6 & 0x800000) != 0x0 && (a3 == 16777220 || a3 == 16777219)) {
-                    a3 = 16777216;
+                break;
+            case Opcodes.ANEWARRAY:
+                String s = item.strVal1;
+                pop();
+                if (s.charAt(0) == '[') {
+                    push(cw, '[' + s);
+                } else {
+                    push(ARRAY_OF | OBJECT | cw.addType(s));
                 }
-            }
-            if (this.i != null) {
-                a3 = this.a(classWriter, a3);
-            }
-            b |= a(classWriter, a3, frame.d, n5 + l);
+                break;
+            case Opcodes.CHECKCAST:
+                s = item.strVal1;
+                pop();
+                if (s.charAt(0) == '[') {
+                    push(cw, s);
+                } else {
+                    push(OBJECT | cw.addType(s));
+                }
+                break;
+            // case Opcodes.MULTIANEWARRAY:
+            default:
+                pop(arg);
+                push(cw, item.strVal1);
+                break;
         }
-        return b;
     }
-    
-    private static boolean a(final ClassWriter classWriter, int n, final int[] array, final int n2) {
-        final int n3 = array[n2];
-        if (n3 == n) {
+
+    /**
+     * Merges the input frame of the given basic block with the input and output
+     * frames of this basic block. Returns <tt>true</tt> if the input frame of
+     * the given label has been changed by this operation.
+     *
+     * @param cw
+     *            the ClassWriter to which this label belongs.
+     * @param frame
+     *            the basic block whose input frame must be updated.
+     * @param edge
+     *            the kind of the {@link Edge} between this label and 'label'.
+     *            See {@link Edge#info}.
+     * @return <tt>true</tt> if the input frame of the given label has been
+     *         changed by this operation.
+     */
+    boolean merge(final ClassWriter cw, final Frame frame, final int edge) {
+        boolean changed = false;
+        int i, s, dim, kind, t;
+
+        int nLocal = inputLocals.length;
+        int nStack = inputStack.length;
+        if (frame.inputLocals == null) {
+            frame.inputLocals = new int[nLocal];
+            changed = true;
+        }
+
+        for (i = 0; i < nLocal; ++i) {
+            if (outputLocals != null && i < outputLocals.length) {
+                s = outputLocals[i];
+                if (s == 0) {
+                    t = inputLocals[i];
+                } else {
+                    dim = s & DIM;
+                    kind = s & KIND;
+                    if (kind == BASE) {
+                        t = s;
+                    } else {
+                        if (kind == LOCAL) {
+                            t = dim + inputLocals[s & VALUE];
+                        } else {
+                            t = dim + inputStack[nStack - (s & VALUE)];
+                        }
+                        if ((s & TOP_IF_LONG_OR_DOUBLE) != 0
+                                && (t == LONG || t == DOUBLE)) {
+                            t = TOP;
+                        }
+                    }
+                }
+            } else {
+                t = inputLocals[i];
+            }
+            if (initializations != null) {
+                t = init(cw, t);
+            }
+            changed |= merge(cw, t, frame.inputLocals, i);
+        }
+
+        if (edge > 0) {
+            for (i = 0; i < nLocal; ++i) {
+                t = inputLocals[i];
+                changed |= merge(cw, t, frame.inputLocals, i);
+            }
+            if (frame.inputStack == null) {
+                frame.inputStack = new int[1];
+                changed = true;
+            }
+            changed |= merge(cw, edge, frame.inputStack, 0);
+            return changed;
+        }
+
+        int nInputStack = inputStack.length + owner.inputStackTop;
+        if (frame.inputStack == null) {
+            frame.inputStack = new int[nInputStack + outputStackTop];
+            changed = true;
+        }
+
+        for (i = 0; i < nInputStack; ++i) {
+            t = inputStack[i];
+            if (initializations != null) {
+                t = init(cw, t);
+            }
+            changed |= merge(cw, t, frame.inputStack, i);
+        }
+        for (i = 0; i < outputStackTop; ++i) {
+            s = outputStack[i];
+            dim = s & DIM;
+            kind = s & KIND;
+            if (kind == BASE) {
+                t = s;
+            } else {
+                if (kind == LOCAL) {
+                    t = dim + inputLocals[s & VALUE];
+                } else {
+                    t = dim + inputStack[nStack - (s & VALUE)];
+                }
+                if ((s & TOP_IF_LONG_OR_DOUBLE) != 0
+                        && (t == LONG || t == DOUBLE)) {
+                    t = TOP;
+                }
+            }
+            if (initializations != null) {
+                t = init(cw, t);
+            }
+            changed |= merge(cw, t, frame.inputStack, nInputStack + i);
+        }
+        return changed;
+    }
+
+    /**
+     * Merges the type at the given index in the given type array with the given
+     * type. Returns <tt>true</tt> if the type array has been modified by this
+     * operation.
+     *
+     * @param cw
+     *            the ClassWriter to which this label belongs.
+     * @param t
+     *            the type with which the type array element must be merged.
+     * @param types
+     *            an array of types.
+     * @param index
+     *            the index of the type that must be merged in 'types'.
+     * @return <tt>true</tt> if the type array has been modified by this
+     *         operation.
+     */
+    private static boolean merge(final ClassWriter cw, int t,
+                                 final int[] types, final int index) {
+        int u = types[index];
+        if (u == t) {
+            // if the types are equal, merge(u,t)=u, so there is no change
             return false;
         }
-        if ((n & 0xFFFFFFF) == 0x1000005) {
-            if (n3 == 16777221) {
+        if ((t & ~DIM) == NULL) {
+            if (u == NULL) {
                 return false;
             }
-            n = 16777221;
+            t = NULL;
         }
-        if (n3 == 0) {
-            array[n2] = n;
+        if (u == 0) {
+            // if types[index] has never been assigned, merge(u,t)=t
+            types[index] = t;
             return true;
         }
-        int n4;
-        if ((n3 & 0xFF00000) == 0x1700000 || (n3 & 0xF0000000) != 0x0) {
-            if (n == 16777221) {
+        int v;
+        if ((u & BASE_KIND) == OBJECT || (u & DIM) != 0) {
+            // if u is a reference type of any dimension
+            if (t == NULL) {
+                // if t is the NULL type, merge(u,t)=u, so there is no change
                 return false;
-            }
-            if ((n & 0xFFF00000) == (n3 & 0xFFF00000)) {
-                if ((n3 & 0xFF00000) == 0x1700000) {
-                    n4 = ((n & 0xF0000000) | 0x1700000 | classWriter.a(n & 0xFFFFF, n3 & 0xFFFFF));
+            } else if ((t & (DIM | BASE_KIND)) == (u & (DIM | BASE_KIND))) {
+                // if t and u have the same dimension and same base kind
+                if ((u & BASE_KIND) == OBJECT) {
+                    // if t is also a reference type, and if u and t have the
+                    // same dimension merge(u,t) = dim(t) | common parent of the
+                    // element types of u and t
+                    v = (t & DIM) | OBJECT
+                            | cw.getMergedType(t & BASE_VALUE, u & BASE_VALUE);
+                } else {
+                    // if u and t are array types, but not with the same element
+                    // type, merge(u,t) = dim(u) - 1 | java/lang/Object
+                    int vdim = ELEMENT_OF + (u & DIM);
+                    v = vdim | OBJECT | cw.addType("java/lang/Object");
                 }
-                else {
-                    n4 = (-268435456 + (n3 & 0xF0000000) | 0x1700000 | classWriter.c("java/lang/Object"));
-                }
+            } else if ((t & BASE_KIND) == OBJECT || (t & DIM) != 0) {
+                // if t is any other reference or array type, the merged type
+                // is min(udim, tdim) | java/lang/Object, where udim is the
+                // array dimension of u, minus 1 if u is an array type with a
+                // primitive element type (and similarly for tdim).
+                int tdim = (((t & DIM) == 0 || (t & BASE_KIND) == OBJECT) ? 0
+                        : ELEMENT_OF) + (t & DIM);
+                int udim = (((u & DIM) == 0 || (u & BASE_KIND) == OBJECT) ? 0
+                        : ELEMENT_OF) + (u & DIM);
+                v = Math.min(tdim, udim) | OBJECT
+                        | cw.addType("java/lang/Object");
+            } else {
+                // if t is any other type, merge(u,t)=TOP
+                v = TOP;
             }
-            else if ((n & 0xFF00000) == 0x1700000 || (n & 0xF0000000) != 0x0) {
-                n4 = (Math.min((((n & 0xF0000000) == 0x0 || (n & 0xFF00000) == 0x1700000) ? 0 : -268435456) + (n & 0xF0000000), (((n3 & 0xF0000000) == 0x0 || (n3 & 0xFF00000) == 0x1700000) ? 0 : -268435456) + (n3 & 0xF0000000)) | 0x1700000 | classWriter.c("java/lang/Object"));
-            }
-            else {
-                n4 = 16777216;
-            }
+        } else if (u == NULL) {
+            // if u is the NULL type, merge(u,t)=t,
+            // or TOP if t is not a reference type
+            v = (t & BASE_KIND) == OBJECT || (t & DIM) != 0 ? t : TOP;
+        } else {
+            // if u is any other type, merge(u,t)=TOP whatever t
+            v = TOP;
         }
-        else if (n3 == 16777221) {
-            n4 = (((n & 0xFF00000) == 0x1700000 || (n & 0xF0000000) != 0x0) ? n : 16777216);
-        }
-        else {
-            n4 = 16777216;
-        }
-        if (n3 != n4) {
-            array[n2] = n4;
+        if (u != v) {
+            types[index] = v;
             return true;
         }
         return false;
-    }
-    
-    static {
-        _clinit_();
-        final int[] a2 = new int[202];
-        final String s = "EFFFFFFFFGGFFFGGFFFEEFGFGFEEEEEEEEEEEEEEEEEEEEDEDEDDDDDCDCDEEEEEEEEEEEEEEEEEEEEBABABBBBDCFFFGGGEDCDCDCDCDCDCDCDCDCDCEEEEDDDDDDDCDCDCEFEFDDEEFFDEDEEEBDDBBDDDDDDCCCCCCCCEFEDDDCDCDEEEEEEEEEEFEEEEEEDDEEDDEE";
-        for (int i = 0; i < a2.length; ++i) {
-            a2[i] = s.charAt(i) - 'E';
-        }
-        a = a2;
-    }
-    
-    static /* synthetic */ void _clinit_() {
     }
 }

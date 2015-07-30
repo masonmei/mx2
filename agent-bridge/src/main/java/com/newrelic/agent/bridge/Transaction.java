@@ -9,7 +9,6 @@ import com.newrelic.api.agent.Response;
 import com.newrelic.api.agent.Request;
 import com.newrelic.api.agent.ApplicationNamePriority;
 import java.util.Map;
-import com.newrelic.api.agent.Transaction;
 
 public interface Transaction extends com.newrelic.api.agent.Transaction
 {

@@ -1,934 +1,1018 @@
-// 
-// Decompiled by Procyon v0.5.29
-// 
+/*
+ * Javassist, a Java-bytecode translator toolkit.
+ * Copyright (C) 1999- Shigeru Chiba. All Rights Reserved.
+ *
+ * The contents of this file are subject to the Mozilla Public License Version
+ * 1.1 (the "License"); you may not use this file except in compliance with
+ * the License.  Alternatively, the contents of this file may be used under
+ * the terms of the GNU Lesser General Public License Version 2.1 or later,
+ * or the Apache License Version 2.0.
+ *
+ * Software distributed under the License is distributed on an "AS IS" basis,
+ * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
+ * for the specific language governing rights and limitations under the
+ * License.
+ */
 
 package com.newrelic.agent.deps.javassist.compiler;
 
-import com.newrelic.agent.deps.javassist.NotFoundException;
-import com.newrelic.agent.deps.javassist.Modifier;
-import com.newrelic.agent.deps.javassist.bytecode.FieldInfo;
-import com.newrelic.agent.deps.javassist.compiler.ast.InstanceOfExpr;
-import com.newrelic.agent.deps.javassist.compiler.ast.Keyword;
-import com.newrelic.agent.deps.javassist.compiler.ast.DoubleConst;
-import com.newrelic.agent.deps.javassist.compiler.ast.IntConst;
-import com.newrelic.agent.deps.javassist.compiler.ast.StringL;
-import com.newrelic.agent.deps.javassist.compiler.ast.Symbol;
-import com.newrelic.agent.deps.javassist.compiler.ast.CallExpr;
-import com.newrelic.agent.deps.javassist.compiler.ast.Member;
-import com.newrelic.agent.deps.javassist.compiler.ast.BinExpr;
-import com.newrelic.agent.deps.javassist.compiler.ast.CastExpr;
-import com.newrelic.agent.deps.javassist.compiler.ast.CondExpr;
-import com.newrelic.agent.deps.javassist.CtField;
-import com.newrelic.agent.deps.javassist.compiler.ast.Declarator;
-import com.newrelic.agent.deps.javassist.compiler.ast.Expr;
-import com.newrelic.agent.deps.javassist.compiler.ast.Variable;
-import com.newrelic.agent.deps.javassist.compiler.ast.AssignExpr;
-import com.newrelic.agent.deps.javassist.compiler.ast.ArrayInit;
-import com.newrelic.agent.deps.javassist.compiler.ast.ASTree;
-import com.newrelic.agent.deps.javassist.compiler.ast.NewExpr;
-import com.newrelic.agent.deps.javassist.compiler.ast.ASTList;
-import com.newrelic.agent.deps.javassist.ClassPool;
-import com.newrelic.agent.deps.javassist.bytecode.MethodInfo;
 import com.newrelic.agent.deps.javassist.CtClass;
-import com.newrelic.agent.deps.javassist.bytecode.Opcode;
-import com.newrelic.agent.deps.javassist.compiler.ast.Visitor;
+import com.newrelic.agent.deps.javassist.CtField;
+import com.newrelic.agent.deps.javassist.ClassPool;
+import com.newrelic.agent.deps.javassist.Modifier;
+import com.newrelic.agent.deps.javassist.NotFoundException;
+import com.newrelic.agent.deps.javassist.compiler.ast.*;
+import com.newrelic.agent.deps.javassist.bytecode.*;
 
-public class TypeChecker extends Visitor implements Opcode, TokenId
-{
+public class TypeChecker extends Visitor implements Opcode, TokenId {
     static final String javaLangObject = "java.lang.Object";
     static final String jvmJavaLangObject = "java/lang/Object";
     static final String jvmJavaLangString = "java/lang/String";
     static final String jvmJavaLangClass = "java/lang/Class";
-    protected int exprType;
+
+    /* The following fields are used by atXXX() methods
+     * for returning the type of the compiled expression.
+     */
+    protected int exprType;     // VOID, NULL, CLASS, BOOLEAN, INT, ...
     protected int arrayDim;
-    protected String className;
+    protected String className; // JVM-internal representation
+
     protected MemberResolver resolver;
-    protected CtClass thisClass;
+    protected CtClass   thisClass;
     protected MethodInfo thisMethod;
-    
-    public TypeChecker(final CtClass cc, final ClassPool cp) {
-        this.resolver = new MemberResolver(cp);
-        this.thisClass = cc;
-        this.thisMethod = null;
+
+    public TypeChecker(CtClass cc, ClassPool cp) {
+        resolver = new MemberResolver(cp);
+        thisClass = cc;
+        thisMethod = null;
     }
-    
-    protected static String argTypesToString(final int[] types, final int[] dims, final String[] cnames) {
-        final StringBuffer sbuf = new StringBuffer();
+
+    /*
+     * Converts an array of tuples of exprType, arrayDim, and className
+     * into a String object.
+     */
+    protected static String argTypesToString(int[] types, int[] dims,
+                                             String[] cnames) {
+        StringBuffer sbuf = new StringBuffer();
         sbuf.append('(');
-        final int n = types.length;
+        int n = types.length;
         if (n > 0) {
             int i = 0;
             while (true) {
                 typeToString(sbuf, types[i], dims[i], cnames[i]);
-                if (++i >= n) {
+                if (++i < n)
+                    sbuf.append(',');
+                else
                     break;
-                }
-                sbuf.append(',');
             }
         }
+
         sbuf.append(')');
         return sbuf.toString();
     }
-    
-    protected static StringBuffer typeToString(final StringBuffer sbuf, final int type, int dim, final String cname) {
+
+    /*
+     * Converts a tuple of exprType, arrayDim, and className
+     * into a String object.
+     */
+    protected static StringBuffer typeToString(StringBuffer sbuf,
+                                               int type, int dim, String cname) {
         String s;
-        if (type == 307) {
+        if (type == CLASS)
             s = MemberResolver.jvmToJavaName(cname);
-        }
-        else if (type == 412) {
+        else if (type == NULL)
             s = "Object";
-        }
-        else {
+        else
             try {
                 s = MemberResolver.getTypeName(type);
             }
             catch (CompileError e) {
                 s = "?";
             }
-        }
+
         sbuf.append(s);
-        while (dim-- > 0) {
+        while (dim-- > 0)
             sbuf.append("[]");
-        }
+
         return sbuf;
     }
-    
-    public void setThisMethod(final MethodInfo m) {
-        this.thisMethod = m;
+
+    /**
+     * Records the currently compiled method.
+     */
+    public void setThisMethod(MethodInfo m) {
+        thisMethod = m;
     }
-    
+
     protected static void fatal() throws CompileError {
         throw new CompileError("fatal");
     }
-    
+
+    /**
+     * Returns the JVM-internal representation of this class name.
+     */
     protected String getThisName() {
-        return MemberResolver.javaToJvmName(this.thisClass.getName());
+        return MemberResolver.javaToJvmName(thisClass.getName());
     }
-    
+
+    /**
+     * Returns the JVM-internal representation of this super class name.
+     */
     protected String getSuperName() throws CompileError {
-        return MemberResolver.javaToJvmName(MemberResolver.getSuperclass(this.thisClass).getName());
+        return MemberResolver.javaToJvmName(
+                MemberResolver.getSuperclass(thisClass).getName());
     }
-    
-    protected String resolveClassName(final ASTList name) throws CompileError {
-        return this.resolver.resolveClassName(name);
+
+    /* Converts a class name into a JVM-internal representation.
+     *
+     * It may also expand a simple class name to java.lang.*.
+     * For example, this converts Object into java/lang/Object.
+     */
+    protected String resolveClassName(ASTList name) throws CompileError {
+        return resolver.resolveClassName(name);
     }
-    
-    protected String resolveClassName(final String jvmName) throws CompileError {
-        return this.resolver.resolveJvmClassName(jvmName);
+
+    /* Expands a simple class name to java.lang.*.
+     * For example, this converts Object into java/lang/Object.
+     */
+    protected String resolveClassName(String jvmName) throws CompileError {
+        return resolver.resolveJvmClassName(jvmName);
     }
-    
-    @Override
-    public void atNewExpr(final NewExpr expr) throws CompileError {
-        if (expr.isArray()) {
-            this.atNewArrayExpr(expr);
-        }
+
+    public void atNewExpr(NewExpr expr) throws CompileError {
+        if (expr.isArray())
+            atNewArrayExpr(expr);
         else {
-            final CtClass clazz = this.resolver.lookupClassByName(expr.getClassName());
-            final String cname = clazz.getName();
-            final ASTList args = expr.getArguments();
-            this.atMethodCallCore(clazz, "<init>", args);
-            this.exprType = 307;
-            this.arrayDim = 0;
-            this.className = MemberResolver.javaToJvmName(cname);
+            CtClass clazz = resolver.lookupClassByName(expr.getClassName());
+            String cname = clazz.getName();
+            ASTList args = expr.getArguments();
+            atMethodCallCore(clazz, MethodInfo.nameInit, args);
+            exprType = CLASS;
+            arrayDim = 0;
+            className = MemberResolver.javaToJvmName(cname);
         }
     }
-    
-    public void atNewArrayExpr(final NewExpr expr) throws CompileError {
-        final int type = expr.getArrayType();
-        final ASTList size = expr.getArraySize();
-        final ASTList classname = expr.getClassName();
-        final ASTree init = expr.getInitializer();
-        if (init != null) {
+
+    public void atNewArrayExpr(NewExpr expr) throws CompileError {
+        int type = expr.getArrayType();
+        ASTList size = expr.getArraySize();
+        ASTList classname = expr.getClassName();
+        ASTree init = expr.getInitializer();
+        if (init != null)
             init.accept(this);
-        }
-        if (size.length() > 1) {
-            this.atMultiNewArray(type, classname, size);
-        }
+
+        if (size.length() > 1)
+            atMultiNewArray(type, classname, size);
         else {
-            final ASTree sizeExpr = size.head();
-            if (sizeExpr != null) {
+            ASTree sizeExpr = size.head();
+            if (sizeExpr != null)
                 sizeExpr.accept(this);
-            }
-            this.exprType = type;
-            this.arrayDim = 1;
-            if (type == 307) {
-                this.className = this.resolveClassName(classname);
-            }
-            else {
-                this.className = null;
-            }
+
+            exprType = type;
+            arrayDim = 1;
+            if (type == CLASS)
+                className = resolveClassName(classname);
+            else
+                className = null;
         }
     }
-    
-    @Override
-    public void atArrayInit(final ArrayInit init) throws CompileError {
+
+    public void atArrayInit(ArrayInit init) throws CompileError {
         ASTList list = init;
         while (list != null) {
-            final ASTree h = list.head();
+            ASTree h = list.head();
             list = list.tail();
-            if (h != null) {
+            if (h != null)
                 h.accept(this);
-            }
         }
     }
-    
-    protected void atMultiNewArray(final int type, final ASTList classname, ASTList size) throws CompileError {
-        final int dim = size.length();
-        int count = 0;
-        while (size != null) {
-            final ASTree s = size.head();
-            if (s == null) {
-                break;
-            }
+
+    protected void atMultiNewArray(int type, ASTList classname, ASTList size)
+            throws CompileError
+    {
+        int count, dim;
+        dim = size.length();
+        for (count = 0; size != null; size = size.tail()) {
+            ASTree s = size.head();
+            if (s == null)
+                break;          // int[][][] a = new int[3][4][];
+
             ++count;
             s.accept(this);
-            size = size.tail();
         }
-        this.exprType = type;
-        this.arrayDim = dim;
-        if (type == 307) {
-            this.className = this.resolveClassName(classname);
-        }
-        else {
-            this.className = null;
-        }
+
+        exprType = type;
+        arrayDim = dim;
+        if (type == CLASS)
+            className = resolveClassName(classname);
+        else
+            className = null;
     }
-    
-    @Override
-    public void atAssignExpr(final AssignExpr expr) throws CompileError {
-        final int op = expr.getOperator();
-        final ASTree left = expr.oprand1();
-        final ASTree right = expr.oprand2();
-        if (left instanceof Variable) {
-            this.atVariableAssign(expr, op, (Variable)left, ((Variable)left).getDeclarator(), right);
-        }
+
+    public void atAssignExpr(AssignExpr expr) throws CompileError {
+        // =, %=, &=, *=, /=, +=, -=, ^=, |=, <<=, >>=, >>>=
+        int op = expr.getOperator();
+        ASTree left = expr.oprand1();
+        ASTree right = expr.oprand2();
+        if (left instanceof Variable)
+            atVariableAssign(expr, op, (Variable)left,
+                    ((Variable)left).getDeclarator(),
+                    right);
         else {
             if (left instanceof Expr) {
-                final Expr e = (Expr)left;
-                if (e.getOperator() == 65) {
-                    this.atArrayAssign(expr, op, (Expr)left, right);
+                Expr e = (Expr)left;
+                if (e.getOperator() == ARRAY) {
+                    atArrayAssign(expr, op, (Expr) left, right);
                     return;
                 }
             }
-            this.atFieldAssign(expr, op, left, right);
+
+            atFieldAssign(expr, op, left, right);
         }
     }
-    
-    private void atVariableAssign(final Expr expr, final int op, final Variable var, final Declarator d, final ASTree right) throws CompileError {
-        final int varType = d.getType();
-        final int varArray = d.getArrayDim();
-        final String varClass = d.getClassName();
-        if (op != 61) {
-            this.atVariable(var);
-        }
+
+    /* op is either =, %=, &=, *=, /=, +=, -=, ^=, |=, <<=, >>=, or >>>=.
+     *
+     * expr and var can be null.
+     */
+    private void atVariableAssign(Expr expr, int op, Variable var,
+                                  Declarator d, ASTree right)
+            throws CompileError
+    {
+        int varType = d.getType();
+        int varArray = d.getArrayDim();
+        String varClass = d.getClassName();
+
+        if (op != '=')
+            atVariable(var);
+
         right.accept(this);
-        this.exprType = varType;
-        this.arrayDim = varArray;
-        this.className = varClass;
+        exprType = varType;
+        arrayDim = varArray;
+        className = varClass;
     }
-    
-    private void atArrayAssign(final Expr expr, final int op, final Expr array, final ASTree right) throws CompileError {
-        this.atArrayRead(array.oprand1(), array.oprand2());
-        final int aType = this.exprType;
-        final int aDim = this.arrayDim;
-        final String cname = this.className;
+
+    private void atArrayAssign(Expr expr, int op, Expr array,
+                               ASTree right) throws CompileError
+    {
+        atArrayRead(array.oprand1(), array.oprand2());
+        int aType = exprType;
+        int aDim = arrayDim;
+        String cname = className;
         right.accept(this);
-        this.exprType = aType;
-        this.arrayDim = aDim;
-        this.className = cname;
+        exprType = aType;
+        arrayDim = aDim;
+        className = cname;
     }
-    
-    protected void atFieldAssign(final Expr expr, final int op, final ASTree left, final ASTree right) throws CompileError {
-        final CtField f = this.fieldAccess(left);
-        this.atFieldRead(f);
-        final int fType = this.exprType;
-        final int fDim = this.arrayDim;
-        final String cname = this.className;
+
+    protected void atFieldAssign(Expr expr, int op, ASTree left, ASTree right)
+            throws CompileError
+    {
+        CtField f = fieldAccess(left);
+        atFieldRead(f);
+        int fType = exprType;
+        int fDim = arrayDim;
+        String cname = className;
         right.accept(this);
-        this.exprType = fType;
-        this.arrayDim = fDim;
-        this.className = cname;
+        exprType = fType;
+        arrayDim = fDim;
+        className = cname;
     }
-    
-    @Override
-    public void atCondExpr(final CondExpr expr) throws CompileError {
-        this.booleanExpr(expr.condExpr());
+
+    public void atCondExpr(CondExpr expr) throws CompileError {
+        booleanExpr(expr.condExpr());
         expr.thenExpr().accept(this);
-        final int type1 = this.exprType;
-        final int dim1 = this.arrayDim;
-        final String cname1 = this.className;
+        int type1 = exprType;
+        int dim1 = arrayDim;
+        String cname1 = className;
         expr.elseExpr().accept(this);
-        if (dim1 == 0 && dim1 == this.arrayDim) {
-            if (CodeGen.rightIsStrong(type1, this.exprType)) {
-                expr.setThen(new CastExpr(this.exprType, 0, expr.thenExpr()));
-            }
-            else if (CodeGen.rightIsStrong(this.exprType, type1)) {
+
+        if (dim1 == 0 && dim1 == arrayDim)
+            if (CodeGen.rightIsStrong(type1, exprType))
+                expr.setThen(new CastExpr(exprType, 0, expr.thenExpr()));
+            else if (CodeGen.rightIsStrong(exprType, type1)) {
                 expr.setElse(new CastExpr(type1, 0, expr.elseExpr()));
-                this.exprType = type1;
+                exprType = type1;
             }
-        }
     }
-    
-    @Override
-    public void atBinExpr(final BinExpr expr) throws CompileError {
-        final int token = expr.getOperator();
-        final int k = CodeGen.lookupBinOp(token);
+
+    /*
+     * If atBinExpr() substitutes a new expression for the original
+     * binary-operator expression, it changes the operator name to '+'
+     * (if the original is not '+') and sets the new expression to the
+     * left-hand-side expression and null to the right-hand-side expression. 
+     */
+    public void atBinExpr(BinExpr expr) throws CompileError {
+        int token = expr.getOperator();
+        int k = CodeGen.lookupBinOp(token);
         if (k >= 0) {
-            if (token == 43) {
-                Expr e = this.atPlusExpr(expr);
+            /* arithmetic operators: +, -, *, /, %, |, ^, &, <<, >>, >>>
+             */
+            if (token == '+') {
+                Expr e = atPlusExpr(expr);
                 if (e != null) {
-                    e = CallExpr.makeCall(Expr.make(46, e, new Member("toString")), null);
+                    /* String concatenation has been translated into
+                     * an expression using StringBuffer.
+                     */
+                    e = CallExpr.makeCall(Expr.make('.', e,
+                            new Member("toString")), null);
                     expr.setOprand1(e);
-                    expr.setOprand2(null);
-                    this.className = "java/lang/String";
+                    expr.setOprand2(null);    // <---- look at this!
+                    className = jvmJavaLangString;
                 }
             }
             else {
-                final ASTree left = expr.oprand1();
-                final ASTree right = expr.oprand2();
+                ASTree left = expr.oprand1();
+                ASTree right = expr.oprand2();
                 left.accept(this);
-                final int type1 = this.exprType;
+                int type1 = exprType;
                 right.accept(this);
-                if (!this.isConstant(expr, token, left, right)) {
-                    this.computeBinExprType(expr, token, type1);
-                }
+                if (!isConstant(expr, token, left, right))
+                    computeBinExprType(expr, token, type1);
             }
         }
         else {
-            this.booleanExpr(expr);
+            /* equation: &&, ||, ==, !=, <=, >=, <, >
+            */
+            booleanExpr(expr);
         }
     }
-    
-    private Expr atPlusExpr(final BinExpr expr) throws CompileError {
-        final ASTree left = expr.oprand1();
-        final ASTree right = expr.oprand2();
+
+    /* EXPR must be a + expression.
+     * atPlusExpr() returns non-null if the given expression is string
+     * concatenation.  The returned value is "new StringBuffer().append..".
+     */
+    private Expr atPlusExpr(BinExpr expr) throws CompileError {
+        ASTree left = expr.oprand1();
+        ASTree right = expr.oprand2();
         if (right == null) {
+            // this expression has been already type-checked.
+            // see atBinExpr() above.
             left.accept(this);
             return null;
         }
+
         if (isPlusExpr(left)) {
-            final Expr newExpr = this.atPlusExpr((BinExpr)left);
+            Expr newExpr = atPlusExpr((BinExpr) left);
             if (newExpr != null) {
                 right.accept(this);
-                this.exprType = 307;
-                this.arrayDim = 0;
-                this.className = "java/lang/StringBuffer";
+                exprType = CLASS;
+                arrayDim = 0;
+                className = "java/lang/StringBuffer";
                 return makeAppendCall(newExpr, right);
             }
         }
-        else {
+        else
             left.accept(this);
-        }
-        final int type1 = this.exprType;
-        final int dim1 = this.arrayDim;
-        final String cname = this.className;
+
+        int type1 = exprType;
+        int dim1 = arrayDim;
+        String cname = className;
         right.accept(this);
-        if (this.isConstant(expr, 43, left, right)) {
+
+        if (isConstant(expr, '+', left, right))
             return null;
-        }
-        if ((type1 == 307 && dim1 == 0 && "java/lang/String".equals(cname)) || (this.exprType == 307 && this.arrayDim == 0 && "java/lang/String".equals(this.className))) {
-            final ASTList sbufClass = ASTList.make(new Symbol("java"), new Symbol("lang"), new Symbol("StringBuffer"));
-            final ASTree e = new NewExpr(sbufClass, null);
-            this.exprType = 307;
-            this.arrayDim = 0;
-            this.className = "java/lang/StringBuffer";
+
+        if ((type1 == CLASS && dim1 == 0 && jvmJavaLangString.equals(cname))
+                || (exprType == CLASS && arrayDim == 0
+                && jvmJavaLangString.equals(className))) {
+            ASTList sbufClass = ASTList.make(new Symbol("java"),
+                    new Symbol("lang"), new Symbol("StringBuffer"));
+            ASTree e = new NewExpr(sbufClass, null);
+            exprType = CLASS;
+            arrayDim = 0;
+            className = "java/lang/StringBuffer";
             return makeAppendCall(makeAppendCall(e, left), right);
         }
-        this.computeBinExprType(expr, 43, type1);
-        return null;
+        else {
+            computeBinExprType(expr, '+', type1);
+            return null;
+        }
     }
-    
-    private boolean isConstant(final BinExpr expr, final int op, ASTree left, ASTree right) throws CompileError {
+
+    private boolean isConstant(BinExpr expr, int op, ASTree left,
+                               ASTree right) throws CompileError
+    {
         left = stripPlusExpr(left);
         right = stripPlusExpr(right);
         ASTree newExpr = null;
-        if (left instanceof StringL && right instanceof StringL && op == 43) {
-            newExpr = new StringL(((StringL)left).get() + ((StringL)right).get());
-        }
-        else if (left instanceof IntConst) {
+        if (left instanceof StringL && right instanceof StringL && op == '+')
+            newExpr = new StringL(((StringL)left).get()
+                    + ((StringL)right).get());
+        else if (left instanceof IntConst)
             newExpr = ((IntConst)left).compute(op, right);
+        else if (left instanceof DoubleConst)
+                newExpr = ((DoubleConst)left).compute(op, right);
+
+        if (newExpr == null)
+            return false;       // not a constant expression
+        else {
+            expr.setOperator('+');
+            expr.setOprand1(newExpr);
+            expr.setOprand2(null);
+            newExpr.accept(this);   // for setting exprType, arrayDim, ...
+            return true;
         }
-        else if (left instanceof DoubleConst) {
-            newExpr = ((DoubleConst)left).compute(op, right);
-        }
-        if (newExpr == null) {
-            return false;
-        }
-        expr.setOperator(43);
-        expr.setOprand1(newExpr);
-        expr.setOprand2(null);
-        newExpr.accept(this);
-        return true;
     }
-    
-    static ASTree stripPlusExpr(final ASTree expr) {
+
+    /* CodeGen.atSwitchStmnt() also calls stripPlusExpr().
+     */
+    static ASTree stripPlusExpr(ASTree expr) {
         if (expr instanceof BinExpr) {
-            final BinExpr e = (BinExpr)expr;
-            if (e.getOperator() == 43 && e.oprand2() == null) {
+            BinExpr e = (BinExpr)expr;
+            if (e.getOperator() == '+' && e.oprand2() == null)
                 return e.getLeft();
-            }
         }
-        else if (expr instanceof Expr) {
-            final Expr e2 = (Expr)expr;
-            final int op = e2.getOperator();
-            if (op == 35) {
-                final ASTree cexpr = getConstantFieldValue((Member)e2.oprand2());
-                if (cexpr != null) {
+        else if (expr instanceof Expr) {    // note: BinExpr extends Expr.
+            Expr e = (Expr)expr;
+            int op = e.getOperator();
+            if (op == MEMBER) {
+                ASTree cexpr = getConstantFieldValue((Member)e.oprand2());
+                if (cexpr != null)
                     return cexpr;
-                }
             }
-            else if (op == 43 && e2.getRight() == null) {
-                return e2.getLeft();
-            }
+            else if (op == '+' && e.getRight() == null)
+                return e.getLeft();
         }
         else if (expr instanceof Member) {
-            final ASTree cexpr2 = getConstantFieldValue((Member)expr);
-            if (cexpr2 != null) {
-                return cexpr2;
+                ASTree cexpr = getConstantFieldValue((Member)expr);
+                if (cexpr != null)
+                    return cexpr;
             }
-        }
+
         return expr;
     }
-    
-    private static ASTree getConstantFieldValue(final Member mem) {
+
+    /**
+     * If MEM is a static final field, this method returns a constant
+     * expression representing the value of that field.
+     */
+    private static ASTree getConstantFieldValue(Member mem) {
         return getConstantFieldValue(mem.getField());
     }
-    
-    public static ASTree getConstantFieldValue(final CtField f) {
-        if (f == null) {
+
+    public static ASTree getConstantFieldValue(CtField f) {
+        if (f == null)
             return null;
-        }
-        final Object value = f.getConstantValue();
-        if (value == null) {
+
+        Object value = f.getConstantValue();
+        if (value == null)
             return null;
-        }
-        if (value instanceof String) {
+
+        if (value instanceof String)
             return new StringL((String)value);
-        }
-        if (value instanceof Double || value instanceof Float) {
-            final int token = (value instanceof Double) ? 405 : 404;
+        else if (value instanceof Double || value instanceof Float) {
+            int token = (value instanceof Double)
+                    ? DoubleConstant : FloatConstant;
             return new DoubleConst(((Number)value).doubleValue(), token);
         }
-        if (value instanceof Number) {
-            final int token = (value instanceof Long) ? 403 : 402;
-            return new IntConst(((Number)value).longValue(), token);
-        }
-        if (value instanceof Boolean) {
-            return new Keyword(value ? 410 : 411);
-        }
-        return null;
+        else if (value instanceof Number) {
+                int token = (value instanceof Long) ? LongConstant : IntConstant;
+                return new IntConst(((Number)value).longValue(), token);
+            }
+            else if (value instanceof Boolean)
+                    return new Keyword(((Boolean)value).booleanValue()
+                            ? TokenId.TRUE : TokenId.FALSE);
+                else
+                    return null;
     }
-    
-    private static boolean isPlusExpr(final ASTree expr) {
+
+    private static boolean isPlusExpr(ASTree expr) {
         if (expr instanceof BinExpr) {
-            final BinExpr bexpr = (BinExpr)expr;
-            final int token = bexpr.getOperator();
-            return token == 43;
+            BinExpr bexpr = (BinExpr)expr;
+            int token = bexpr.getOperator();
+            return token == '+';
         }
+
         return false;
     }
-    
-    private static Expr makeAppendCall(final ASTree target, final ASTree arg) {
-        return CallExpr.makeCall(Expr.make(46, target, new Member("append")), new ASTList(arg));
+
+    private static Expr makeAppendCall(ASTree target, ASTree arg) {
+        return CallExpr.makeCall(Expr.make('.', target, new Member("append")),
+                new ASTList(arg));
     }
-    
-    private void computeBinExprType(final BinExpr expr, final int token, final int type1) throws CompileError {
-        final int type2 = this.exprType;
-        if (token == 364 || token == 366 || token == 370) {
-            this.exprType = type1;
-        }
-        else {
-            this.insertCast(expr, type1, type2);
-        }
-        if (CodeGen.isP_INT(this.exprType)) {
-            this.exprType = 324;
-        }
+
+    private void computeBinExprType(BinExpr expr, int token, int type1)
+            throws CompileError
+    {
+        // arrayDim should be 0.
+        int type2 = exprType;
+        if (token == LSHIFT || token == RSHIFT || token == ARSHIFT)
+            exprType = type1;
+        else
+            insertCast(expr, type1, type2);
+
+        if (CodeGen.isP_INT(exprType))
+            exprType = INT;         // type1 may be BYTE, ...
     }
-    
-    private void booleanExpr(final ASTree expr) throws CompileError {
-        final int op = CodeGen.getCompOperator(expr);
-        if (op == 358) {
-            final BinExpr bexpr = (BinExpr)expr;
+
+    private void booleanExpr(ASTree expr)
+            throws CompileError
+    {
+        int op = CodeGen.getCompOperator(expr);
+        if (op == EQ) {         // ==, !=, ...
+            BinExpr bexpr = (BinExpr)expr;
             bexpr.oprand1().accept(this);
-            final int type1 = this.exprType;
-            final int dim1 = this.arrayDim;
+            int type1 = exprType;
+            int dim1 = arrayDim;
             bexpr.oprand2().accept(this);
-            if (dim1 == 0 && this.arrayDim == 0) {
-                this.insertCast(bexpr, type1, this.exprType);
-            }
+            if (dim1 == 0 && arrayDim == 0)
+                insertCast(bexpr, type1, exprType);
         }
-        else if (op == 33) {
+        else if (op == '!')
             ((Expr)expr).oprand1().accept(this);
-        }
-        else if (op == 369 || op == 368) {
-            final BinExpr bexpr = (BinExpr)expr;
-            bexpr.oprand1().accept(this);
-            bexpr.oprand2().accept(this);
-        }
-        else {
-            expr.accept(this);
-        }
-        this.exprType = 301;
-        this.arrayDim = 0;
+        else if (op == ANDAND || op == OROR) {
+                BinExpr bexpr = (BinExpr)expr;
+                bexpr.oprand1().accept(this);
+                bexpr.oprand2().accept(this);
+            }
+            else                // others
+                expr.accept(this);
+
+        exprType = BOOLEAN;
+        arrayDim = 0;
     }
-    
-    private void insertCast(final BinExpr expr, final int type1, final int type2) throws CompileError {
-        if (CodeGen.rightIsStrong(type1, type2)) {
+
+    private void insertCast(BinExpr expr, int type1, int type2)
+            throws CompileError
+    {
+        if (CodeGen.rightIsStrong(type1, type2))
             expr.setLeft(new CastExpr(type2, 0, expr.oprand1()));
-        }
-        else {
-            this.exprType = type1;
-        }
+        else
+            exprType = type1;
     }
-    
-    @Override
-    public void atCastExpr(final CastExpr expr) throws CompileError {
-        final String cname = this.resolveClassName(expr.getClassName());
+
+    public void atCastExpr(CastExpr expr) throws CompileError {
+        String cname = resolveClassName(expr.getClassName());
         expr.getOprand().accept(this);
-        this.exprType = expr.getType();
-        this.arrayDim = expr.getArrayDim();
-        this.className = cname;
+        exprType = expr.getType();
+        arrayDim = expr.getArrayDim();
+        className = cname;
     }
-    
-    @Override
-    public void atInstanceOfExpr(final InstanceOfExpr expr) throws CompileError {
+
+    public void atInstanceOfExpr(InstanceOfExpr expr) throws CompileError {
         expr.getOprand().accept(this);
-        this.exprType = 301;
-        this.arrayDim = 0;
+        exprType = BOOLEAN;
+        arrayDim = 0;
     }
-    
-    @Override
-    public void atExpr(final Expr expr) throws CompileError {
-        final int token = expr.getOperator();
-        final ASTree oprand = expr.oprand1();
-        if (token == 46) {
-            final String member = ((Symbol)expr.oprand2()).get();
-            if (member.equals("length")) {
+
+    public void atExpr(Expr expr) throws CompileError {
+        // array access, member access,
+        // (unary) +, (unary) -, ++, --, !, ~
+
+        int token = expr.getOperator();
+        ASTree oprand = expr.oprand1();
+        if (token == '.') {
+            String member = ((Symbol)expr.oprand2()).get();
+            if (member.equals("length"))
                 try {
-                    this.atArrayLength(expr);
+                    atArrayLength(expr);
                 }
                 catch (NoFieldException nfe) {
-                    this.atFieldRead(expr);
+                    // length might be a class or package name.
+                    atFieldRead(expr);
                 }
-            }
-            else if (member.equals("class")) {
-                this.atClassObject(expr);
-            }
-            else {
-                this.atFieldRead(expr);
-            }
+            else if (member.equals("class"))
+                atClassObject(expr);  // .class
+            else
+                atFieldRead(expr);
         }
-        else if (token == 35) {
-            final String member = ((Symbol)expr.oprand2()).get();
-            if (member.equals("class")) {
-                this.atClassObject(expr);
-            }
-            else {
-                this.atFieldRead(expr);
-            }
+        else if (token == MEMBER) {     // field read
+            String member = ((Symbol)expr.oprand2()).get();
+            if (member.equals("class"))
+                atClassObject(expr);  // .class
+            else
+                atFieldRead(expr);
         }
-        else if (token == 65) {
-            this.atArrayRead(oprand, expr.oprand2());
-        }
-        else if (token == 362 || token == 363) {
-            this.atPlusPlus(token, oprand, expr);
-        }
-        else if (token == 33) {
-            this.booleanExpr(expr);
-        }
-        else if (token == 67) {
-            fatal();
-        }
-        else {
-            oprand.accept(this);
-            if (!this.isConstant(expr, token, oprand) && (token == 45 || token == 126) && CodeGen.isP_INT(this.exprType)) {
-                this.exprType = 324;
-            }
-        }
+        else if (token == ARRAY)
+                atArrayRead(oprand, expr.oprand2());
+            else if (token == PLUSPLUS || token == MINUSMINUS)
+                    atPlusPlus(token, oprand, expr);
+                else if (token == '!')
+                        booleanExpr(expr);
+                    else if (token == CALL)              // method call
+                            fatal();
+                        else {
+                            oprand.accept(this);
+                            if (!isConstant(expr, token, oprand))
+                                if (token == '-' || token == '~')
+                                    if (CodeGen.isP_INT(exprType))
+                                        exprType = INT;         // type may be BYTE, ...
+                        }
     }
-    
-    private boolean isConstant(final Expr expr, final int op, ASTree oprand) {
+
+    private boolean isConstant(Expr expr, int op, ASTree oprand) {
         oprand = stripPlusExpr(oprand);
         if (oprand instanceof IntConst) {
-            final IntConst c = (IntConst)oprand;
+            IntConst c = (IntConst)oprand;
             long v = c.get();
-            if (op == 45) {
+            if (op == '-')
                 v = -v;
-            }
-            else {
-                if (op != 126) {
-                    return false;
-                }
-                v ^= -1L;
-            }
+            else if (op == '~')
+                v = ~v;
+            else
+                return false;
+
             c.set(v);
         }
-        else {
-            if (!(oprand instanceof DoubleConst)) {
+        else if (oprand instanceof DoubleConst) {
+            DoubleConst c = (DoubleConst)oprand;
+            if (op == '-')
+                c.set(-c.get());
+            else
                 return false;
-            }
-            final DoubleConst c2 = (DoubleConst)oprand;
-            if (op != 45) {
-                return false;
-            }
-            c2.set(-c2.get());
         }
-        expr.setOperator(43);
+        else
+            return false;
+
+        expr.setOperator('+');
         return true;
     }
-    
-    @Override
-    public void atCallExpr(final CallExpr expr) throws CompileError {
+
+    public void atCallExpr(CallExpr expr) throws CompileError {
         String mname = null;
         CtClass targetClass = null;
-        final ASTree method = expr.oprand1();
-        final ASTList args = (ASTList)expr.oprand2();
+        ASTree method = expr.oprand1();
+        ASTList args = (ASTList)expr.oprand2();
+
         if (method instanceof Member) {
             mname = ((Member)method).get();
-            targetClass = this.thisClass;
+            targetClass = thisClass;
         }
-        else if (method instanceof Keyword) {
-            mname = "<init>";
-            if (((Keyword)method).get() == 336) {
-                targetClass = MemberResolver.getSuperclass(this.thisClass);
-            }
-            else {
-                targetClass = this.thisClass;
-            }
+        else if (method instanceof Keyword) {   // constructor
+            mname = MethodInfo.nameInit;        // <init>
+            if (((Keyword)method).get() == SUPER)
+                targetClass = MemberResolver.getSuperclass(thisClass);
+            else
+                targetClass = thisClass;
         }
         else if (method instanceof Expr) {
-            final Expr e = (Expr)method;
-            mname = ((Symbol)e.oprand2()).get();
-            final int op = e.getOperator();
-            if (op == 35) {
-                targetClass = this.resolver.lookupClass(((Symbol)e.oprand1()).get(), false);
-            }
-            else if (op == 46) {
-                final ASTree target = e.oprand1();
-                try {
-                    target.accept(this);
-                }
-                catch (NoFieldException nfe) {
-                    if (nfe.getExpr() != target) {
-                        throw nfe;
+                Expr e = (Expr)method;
+                mname = ((Symbol)e.oprand2()).get();
+                int op = e.getOperator();
+                if (op == MEMBER)                // static method
+                    targetClass
+                            = resolver.lookupClass(((Symbol)e.oprand1()).get(),
+                            false);
+                else if (op == '.') {
+                    ASTree target = e.oprand1();
+                    try {
+                        target.accept(this);
                     }
-                    this.exprType = 307;
-                    this.arrayDim = 0;
-                    this.className = nfe.getField();
-                    e.setOperator(35);
-                    e.setOprand1(new Symbol(MemberResolver.jvmToJavaName(this.className)));
+                    catch (NoFieldException nfe) {
+                        if (nfe.getExpr() != target)
+                            throw nfe;
+
+                        // it should be a static method.
+                        exprType = CLASS;
+                        arrayDim = 0;
+                        className = nfe.getField(); // JVM-internal
+                        e.setOperator(MEMBER);
+                        e.setOprand1(new Symbol(MemberResolver.jvmToJavaName(
+                                className)));
+                    }
+
+                    if (arrayDim > 0)
+                        targetClass = resolver.lookupClass(javaLangObject, true);
+                    else if (exprType == CLASS /* && arrayDim == 0 */)
+                        targetClass = resolver.lookupClassByJvmName(className);
+                    else
+                        badMethod();
                 }
-                if (this.arrayDim > 0) {
-                    targetClass = this.resolver.lookupClass("java.lang.Object", true);
-                }
-                else if (this.exprType == 307) {
-                    targetClass = this.resolver.lookupClassByJvmName(this.className);
-                }
-                else {
+                else
                     badMethod();
-                }
             }
-            else {
-                badMethod();
-            }
-        }
-        else {
-            fatal();
-        }
-        final MemberResolver.Method minfo = this.atMethodCallCore(targetClass, mname, args);
+            else
+                fatal();
+
+        MemberResolver.Method minfo
+                = atMethodCallCore(targetClass, mname, args);
         expr.setMethod(minfo);
     }
-    
+
     private static void badMethod() throws CompileError {
         throw new CompileError("bad method");
     }
-    
-    public MemberResolver.Method atMethodCallCore(final CtClass targetClass, final String mname, final ASTList args) throws CompileError {
-        final int nargs = this.getMethodArgsLength(args);
-        final int[] types = new int[nargs];
-        final int[] dims = new int[nargs];
-        final String[] cnames = new String[nargs];
-        this.atMethodArgs(args, types, dims, cnames);
-        final MemberResolver.Method found = this.resolver.lookupMethod(targetClass, this.thisClass, this.thisMethod, mname, types, dims, cnames);
+
+    /**
+     * @return  a pair of the class declaring the invoked method
+     *          and the MethodInfo of that method.  Never null.
+     */
+    public MemberResolver.Method atMethodCallCore(CtClass targetClass,
+                                                  String mname, ASTList args)
+            throws CompileError
+    {
+        int nargs = getMethodArgsLength(args);
+        int[] types = new int[nargs];
+        int[] dims = new int[nargs];
+        String[] cnames = new String[nargs];
+        atMethodArgs(args, types, dims, cnames);
+
+        MemberResolver.Method found
+                = resolver.lookupMethod(targetClass, thisClass, thisMethod,
+                mname, types, dims, cnames);
         if (found == null) {
-            final String clazz = targetClass.getName();
-            final String signature = argTypesToString(types, dims, cnames);
+            String clazz = targetClass.getName();
+            String signature = argTypesToString(types, dims, cnames);
             String msg;
-            if (mname.equals("<init>")) {
+            if (mname.equals(MethodInfo.nameInit))
                 msg = "cannot find constructor " + clazz + signature;
-            }
-            else {
-                msg = mname + signature + " not found in " + clazz;
-            }
+            else
+                msg = mname + signature +  " not found in " + clazz;
+
             throw new CompileError(msg);
         }
-        final String desc = found.info.getDescriptor();
-        this.setReturnType(desc);
+
+        String desc = found.info.getDescriptor();
+        setReturnType(desc);
         return found;
     }
-    
-    public int getMethodArgsLength(final ASTList args) {
+
+    public int getMethodArgsLength(ASTList args) {
         return ASTList.length(args);
     }
-    
-    public void atMethodArgs(ASTList args, final int[] types, final int[] dims, final String[] cnames) throws CompileError {
+
+    public void atMethodArgs(ASTList args, int[] types, int[] dims,
+                             String[] cnames) throws CompileError {
         int i = 0;
         while (args != null) {
-            final ASTree a = args.head();
+            ASTree a = args.head();
             a.accept(this);
-            types[i] = this.exprType;
-            dims[i] = this.arrayDim;
-            cnames[i] = this.className;
+            types[i] = exprType;
+            dims[i] = arrayDim;
+            cnames[i] = className;
             ++i;
             args = args.tail();
         }
     }
-    
-    void setReturnType(final String desc) throws CompileError {
-        int i = desc.indexOf(41);
-        if (i < 0) {
+
+    void setReturnType(String desc) throws CompileError {
+        int i = desc.indexOf(')');
+        if (i < 0)
             badMethod();
-        }
+
         char c = desc.charAt(++i);
         int dim = 0;
         while (c == '[') {
             ++dim;
             c = desc.charAt(++i);
         }
-        this.arrayDim = dim;
+
+        arrayDim = dim;
         if (c == 'L') {
-            final int j = desc.indexOf(59, i + 1);
-            if (j < 0) {
+            int j = desc.indexOf(';', i + 1);
+            if (j < 0)
                 badMethod();
-            }
-            this.exprType = 307;
-            this.className = desc.substring(i + 1, j);
+
+            exprType = CLASS;
+            className = desc.substring(i + 1, j);
         }
         else {
-            this.exprType = MemberResolver.descToType(c);
-            this.className = null;
+            exprType = MemberResolver.descToType(c);
+            className = null;
         }
     }
-    
-    private void atFieldRead(final ASTree expr) throws CompileError {
-        this.atFieldRead(this.fieldAccess(expr));
+
+    private void atFieldRead(ASTree expr) throws CompileError {
+        atFieldRead(fieldAccess(expr));
     }
-    
-    private void atFieldRead(final CtField f) throws CompileError {
-        final FieldInfo finfo = f.getFieldInfo2();
-        final String type = finfo.getDescriptor();
+
+    private void atFieldRead(CtField f) throws CompileError {
+        FieldInfo finfo = f.getFieldInfo2();
+        String type = finfo.getDescriptor();
+
         int i = 0;
         int dim = 0;
-        char c;
-        for (c = type.charAt(i); c == '['; c = type.charAt(++i)) {
+        char c = type.charAt(i);
+        while (c == '[') {
             ++dim;
+            c = type.charAt(++i);
         }
-        this.arrayDim = dim;
-        this.exprType = MemberResolver.descToType(c);
-        if (c == 'L') {
-            this.className = type.substring(i + 1, type.indexOf(59, i + 1));
-        }
-        else {
-            this.className = null;
-        }
+
+        arrayDim = dim;
+        exprType = MemberResolver.descToType(c);
+
+        if (c == 'L')
+            className = type.substring(i + 1, type.indexOf(';', i + 1));
+        else
+            className = null;
     }
-    
-    protected CtField fieldAccess(final ASTree expr) throws CompileError {
+
+    /* if EXPR is to access a static field, fieldAccess() translates EXPR
+     * into an expression using '#' (MEMBER).  For example, it translates
+     * java.lang.Integer.TYPE into java.lang.Integer#TYPE.  This translation
+     * speeds up type resolution by MemberCodeGen.
+     */
+    protected CtField fieldAccess(ASTree expr) throws CompileError {
         if (expr instanceof Member) {
-            final Member mem = (Member)expr;
-            final String name = mem.get();
+            Member mem = (Member)expr;
+            String name = mem.get();
             try {
-                final CtField f = this.thisClass.getField(name);
-                if (Modifier.isStatic(f.getModifiers())) {
+                CtField f = thisClass.getField(name);
+                if (Modifier.isStatic(f.getModifiers()))
                     mem.setField(f);
-                }
+
                 return f;
             }
-            catch (NotFoundException e2) {
+            catch (NotFoundException e) {
+                // EXPR might be part of a static member access?
                 throw new NoFieldException(name, expr);
             }
         }
-        if (expr instanceof Expr) {
-            final Expr e = (Expr)expr;
-            final int op = e.getOperator();
-            if (op == 35) {
-                final Member mem2 = (Member)e.oprand2();
-                final CtField f2 = this.resolver.lookupField(((Symbol)e.oprand1()).get(), mem2);
-                mem2.setField(f2);
-                return f2;
+        else if (expr instanceof Expr) {
+            Expr e = (Expr)expr;
+            int op = e.getOperator();
+            if (op == MEMBER) {
+                Member mem = (Member)e.oprand2();
+                CtField f
+                        = resolver.lookupField(((Symbol)e.oprand1()).get(), mem);
+                mem.setField(f);
+                return f;
             }
-            if (op == 46) {
+            else if (op == '.') {
                 try {
                     e.oprand1().accept(this);
                 }
                 catch (NoFieldException nfe) {
-                    if (nfe.getExpr() != e.oprand1()) {
+                    if (nfe.getExpr() != e.oprand1())
                         throw nfe;
-                    }
-                    return this.fieldAccess2(e, nfe.getField());
+
+                    /* EXPR should be a static field.
+                     * If EXPR might be part of a qualified class name,
+                     * lookupFieldByJvmName2() throws NoFieldException.
+                     */
+                    return fieldAccess2(e, nfe.getField());
                 }
+
                 CompileError err = null;
                 try {
-                    if (this.exprType == 307 && this.arrayDim == 0) {
-                        return this.resolver.lookupFieldByJvmName(this.className, (Symbol)e.oprand2());
-                    }
+                    if (exprType == CLASS && arrayDim == 0)
+                        return resolver.lookupFieldByJvmName(className,
+                                (Symbol)e.oprand2());
                 }
                 catch (CompileError ce) {
                     err = ce;
                 }
-                final ASTree oprnd1 = e.oprand1();
-                if (oprnd1 instanceof Symbol) {
-                    return this.fieldAccess2(e, ((Symbol)oprnd1).get());
-                }
-                if (err != null) {
+
+                /* If a filed name is the same name as a package's,
+                 * a static member of a class in that package is not
+                 * visible.  For example,
+                 *
+                 * class Foo {
+                 *   int javassist;
+                 * }
+                 *
+                 * It is impossible to add the following method:
+                 *
+                 * String m() { return javassist.CtClass.intType.toString(); }
+                 *
+                 * because javassist is a field name.  However, this is
+                 * often inconvenient, this compiler allows it.  The following
+                 * code is for that.
+                 */
+                ASTree oprnd1 = e.oprand1();
+                if (oprnd1 instanceof Symbol)
+                    return fieldAccess2(e, ((Symbol)oprnd1).get());
+
+                if (err != null)
                     throw err;
-                }
             }
         }
+
         throw new CompileError("bad filed access");
     }
-    
-    private CtField fieldAccess2(final Expr e, final String jvmClassName) throws CompileError {
-        final Member fname = (Member)e.oprand2();
-        final CtField f = this.resolver.lookupFieldByJvmName2(jvmClassName, fname, e);
-        e.setOperator(35);
+
+    private CtField fieldAccess2(Expr e, String jvmClassName) throws CompileError {
+        Member fname = (Member)e.oprand2();
+        CtField f = resolver.lookupFieldByJvmName2(jvmClassName, fname, e);
+        e.setOperator(MEMBER);
         e.setOprand1(new Symbol(MemberResolver.jvmToJavaName(jvmClassName)));
         fname.setField(f);
         return f;
     }
-    
-    public void atClassObject(final Expr expr) throws CompileError {
-        this.exprType = 307;
-        this.arrayDim = 0;
-        this.className = "java/lang/Class";
+
+    public void atClassObject(Expr expr) throws CompileError {
+        exprType = CLASS;
+        arrayDim = 0;
+        className =jvmJavaLangClass;
     }
-    
-    public void atArrayLength(final Expr expr) throws CompileError {
+
+    public void atArrayLength(Expr expr) throws CompileError {
         expr.oprand1().accept(this);
-        if (this.arrayDim == 0) {
+        if (arrayDim == 0)
             throw new NoFieldException("length", expr);
-        }
-        this.exprType = 324;
-        this.arrayDim = 0;
+
+        exprType = INT;
+        arrayDim = 0;
     }
-    
-    public void atArrayRead(final ASTree array, final ASTree index) throws CompileError {
+
+    public void atArrayRead(ASTree array, ASTree index)
+            throws CompileError
+    {
         array.accept(this);
-        final int type = this.exprType;
-        final int dim = this.arrayDim;
-        final String cname = this.className;
+        int type = exprType;
+        int dim = arrayDim;
+        String cname = className;
         index.accept(this);
-        this.exprType = type;
-        this.arrayDim = dim - 1;
-        this.className = cname;
+        exprType = type;
+        arrayDim = dim - 1;
+        className = cname;
     }
-    
-    private void atPlusPlus(final int token, ASTree oprand, final Expr expr) throws CompileError {
-        final boolean isPost = oprand == null;
-        if (isPost) {
+
+    private void atPlusPlus(int token, ASTree oprand, Expr expr)
+            throws CompileError
+    {
+        boolean isPost = oprand == null;        // ++i or i++?
+        if (isPost)
             oprand = expr.oprand2();
-        }
+
         if (oprand instanceof Variable) {
-            final Declarator d = ((Variable)oprand).getDeclarator();
-            this.exprType = d.getType();
-            this.arrayDim = d.getArrayDim();
+            Declarator d = ((Variable)oprand).getDeclarator();
+            exprType = d.getType();
+            arrayDim = d.getArrayDim();
         }
         else {
             if (oprand instanceof Expr) {
-                final Expr e = (Expr)oprand;
-                if (e.getOperator() == 65) {
-                    this.atArrayRead(e.oprand1(), e.oprand2());
-                    final int t = this.exprType;
-                    if (t == 324 || t == 303 || t == 306 || t == 334) {
-                        this.exprType = 324;
-                    }
+                Expr e = (Expr)oprand;
+                if (e.getOperator() == ARRAY) {
+                    atArrayRead(e.oprand1(), e.oprand2());
+                    // arrayDim should be 0.
+                    int t = exprType;
+                    if (t == INT || t == BYTE || t == CHAR || t == SHORT)
+                        exprType = INT;
+
                     return;
                 }
             }
-            this.atFieldPlusPlus(oprand);
+
+            atFieldPlusPlus(oprand);
         }
     }
-    
-    protected void atFieldPlusPlus(final ASTree oprand) throws CompileError {
-        final CtField f = this.fieldAccess(oprand);
-        this.atFieldRead(f);
-        final int t = this.exprType;
-        if (t == 324 || t == 303 || t == 306 || t == 334) {
-            this.exprType = 324;
-        }
+
+    protected void atFieldPlusPlus(ASTree oprand) throws CompileError
+    {
+        CtField f = fieldAccess(oprand);
+        atFieldRead(f);
+        int t = exprType;
+        if (t == INT || t == BYTE || t == CHAR || t == SHORT)
+            exprType = INT;
     }
-    
-    @Override
-    public void atMember(final Member mem) throws CompileError {
-        this.atFieldRead(mem);
+
+    public void atMember(Member mem) throws CompileError {
+        atFieldRead(mem);
     }
-    
-    @Override
-    public void atVariable(final Variable v) throws CompileError {
-        final Declarator d = v.getDeclarator();
-        this.exprType = d.getType();
-        this.arrayDim = d.getArrayDim();
-        this.className = d.getClassName();
+
+    public void atVariable(Variable v) throws CompileError {
+        Declarator d = v.getDeclarator();
+        exprType = d.getType();
+        arrayDim = d.getArrayDim();
+        className = d.getClassName();
     }
-    
-    @Override
-    public void atKeyword(final Keyword k) throws CompileError {
-        this.arrayDim = 0;
-        final int token = k.get();
+
+    public void atKeyword(Keyword k) throws CompileError {
+        arrayDim = 0;
+        int token = k.get();
         switch (token) {
-            case 410:
-            case 411: {
-                this.exprType = 301;
+            case TRUE :
+            case FALSE :
+                exprType = BOOLEAN;
                 break;
-            }
-            case 412: {
-                this.exprType = 412;
+            case NULL :
+                exprType = NULL;
                 break;
-            }
-            case 336:
-            case 339: {
-                this.exprType = 307;
-                if (token == 339) {
-                    this.className = this.getThisName();
-                    break;
-                }
-                this.className = this.getSuperName();
+            case THIS :
+            case SUPER :
+                exprType = CLASS;
+                if (token == THIS)
+                    className = getThisName();
+                else
+                    className = getSuperName();
                 break;
-            }
-            default: {
+            default :
                 fatal();
-                break;
-            }
         }
     }
-    
-    @Override
-    public void atStringL(final StringL s) throws CompileError {
-        this.exprType = 307;
-        this.arrayDim = 0;
-        this.className = "java/lang/String";
+
+    public void atStringL(StringL s) throws CompileError {
+        exprType = CLASS;
+        arrayDim = 0;
+        className = jvmJavaLangString;
     }
-    
-    @Override
-    public void atIntConst(final IntConst i) throws CompileError {
-        this.arrayDim = 0;
-        final int type = i.getType();
-        if (type == 402 || type == 401) {
-            this.exprType = ((type == 402) ? 324 : 306);
-        }
-        else {
-            this.exprType = 326;
-        }
+
+    public void atIntConst(IntConst i) throws CompileError {
+        arrayDim = 0;
+        int type = i.getType();
+        if (type == IntConstant || type == CharConstant)
+            exprType = (type == IntConstant ? INT : CHAR);
+        else
+            exprType = LONG;
     }
-    
-    @Override
-    public void atDoubleConst(final DoubleConst d) throws CompileError {
-        this.arrayDim = 0;
-        if (d.getType() == 405) {
-            this.exprType = 312;
-        }
-        else {
-            this.exprType = 317;
-        }
+
+    public void atDoubleConst(DoubleConst d) throws CompileError {
+        arrayDim = 0;
+        if (d.getType() == DoubleConstant)
+            exprType = DOUBLE;
+        else
+            exprType = FLOAT;
     }
 }

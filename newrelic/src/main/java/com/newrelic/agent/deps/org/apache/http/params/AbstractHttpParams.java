@@ -14,7 +14,7 @@ public abstract class AbstractHttpParams implements HttpParams, HttpParamsNames
         if (param == null) {
             return defaultValue;
         }
-        return (long)param;
+        return (Long)param;
     }
     
     public HttpParams setLongParameter(final String name, final long value) {
@@ -27,7 +27,7 @@ public abstract class AbstractHttpParams implements HttpParams, HttpParamsNames
         if (param == null) {
             return defaultValue;
         }
-        return (int)param;
+        return (Integer)param;
     }
     
     public HttpParams setIntParameter(final String name, final int value) {
@@ -40,7 +40,7 @@ public abstract class AbstractHttpParams implements HttpParams, HttpParamsNames
         if (param == null) {
             return defaultValue;
         }
-        return (double)param;
+        return (Double)param;
     }
     
     public HttpParams setDoubleParameter(final String name, final double value) {
@@ -53,7 +53,7 @@ public abstract class AbstractHttpParams implements HttpParams, HttpParamsNames
         if (param == null) {
             return defaultValue;
         }
-        return (boolean)param;
+        return (Boolean)param;
     }
     
     public HttpParams setBooleanParameter(final String name, final boolean value) {

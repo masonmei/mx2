@@ -34,7 +34,7 @@ public class BaseConfig implements Config
         if (systemPropertyPrefix != null && systemPropertyPrefix.length() == 0) {
             throw new IllegalArgumentException("prefix must be null or non-empty");
         }
-        this.props = ((props == null) ? Collections.emptyMap() : Collections.unmodifiableMap((Map<? extends String, ?>)props));
+        this.props = ((props == null) ? Collections.<String, Object>emptyMap() : Collections.unmodifiableMap(props));
         this.systemPropertyPrefix = systemPropertyPrefix;
     }
     
@@ -201,12 +201,12 @@ public class BaseConfig implements Config
     protected Collection<String> getUniqueStrings(final String key, final String separator) {
         final Object val = this.getProperty(key);
         if (val instanceof String) {
-            return (Collection<String>)Collections.unmodifiableList((List<?>)getUniqueStringsFromString((String)val, separator));
+            return getUniqueStringsFromString((String)val, separator);
         }
         if (val instanceof Collection) {
-            return (Collection<String>)Collections.unmodifiableList((List<?>)getUniqueStringsFromCollection((Collection<?>)val));
+            return getUniqueStringsFromCollection((Collection<?>)val);
         }
-        return (Collection<String>)Collections.emptySet();
+        return Collections.emptySet();
     }
     
     public static List<String> getUniqueStringsFromCollection(final Collection<?> values, final String prefix) {

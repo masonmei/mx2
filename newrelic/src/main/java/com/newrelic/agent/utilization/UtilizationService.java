@@ -42,8 +42,8 @@ public class UtilizationService extends AbstractService
         this.future = null;
         final AgentConfig agentConfig = ServiceFactory.getConfigService().getDefaultAgentConfig();
         final AgentConfig config = ServiceFactory.getConfigService().getDefaultAgentConfig();
-        this.detectAws = (boolean)config.getValue("utilization.detect_aws", (Object)Boolean.TRUE);
-        this.detectDocker = (boolean)config.getValue("utilization.detect_docker", (Object)Boolean.TRUE);
+        this.detectAws = (Boolean)config.getValue("utilization.detect_aws", (Object)Boolean.TRUE);
+        this.detectDocker = (Boolean)config.getValue("utilization.detect_docker", (Object)Boolean.TRUE);
         this.hostName = Hostname.getHostname(Agent.LOG, agentConfig);
         this.isLinux = isLinuxOs();
     }
@@ -61,12 +61,12 @@ public class UtilizationService extends AbstractService
     }
     
     private void scheduleUtilizationTask() {
-        this.future = UtilizationService.executor.submit((Callable<UtilizationData>)new UtilizationTask());
+        this.future = UtilizationService.executor.submit(new UtilizationTask());
     }
     
     public UtilizationData updateUtilizationData() {
         if (this.future == null) {
-            this.future = UtilizationService.executor.submit((Callable<UtilizationData>)new UtilizationTask());
+            this.future = UtilizationService.executor.submit(new UtilizationTask());
         }
         try {
             this.utilizationData = this.future.get(1000L, TimeUnit.MILLISECONDS);

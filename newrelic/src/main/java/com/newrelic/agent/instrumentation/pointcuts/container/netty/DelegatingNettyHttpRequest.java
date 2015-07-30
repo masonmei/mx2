@@ -4,18 +4,13 @@
 
 package com.newrelic.agent.instrumentation.pointcuts.container.netty;
 
-import com.newrelic.agent.util.IteratorEnumeration;
-import java.util.Enumeration;
-import java.util.Iterator;
 import com.newrelic.agent.Agent;
-import java.util.Collection;
-import java.util.LinkedList;
-import java.net.HttpCookie;
-import java.util.HashMap;
+import com.newrelic.agent.util.IteratorEnumeration;
 import com.newrelic.api.agent.HeaderType;
-import java.util.List;
-import java.util.Map;
 import com.newrelic.api.agent.Request;
+
+import java.net.HttpCookie;
+import java.util.*;
 
 public class DelegatingNettyHttpRequest implements Request
 {
@@ -69,7 +64,7 @@ public class DelegatingNettyHttpRequest implements Request
             return null;
         }
         final Iterator<String> it = this.parameters.keySet().iterator();
-        return new IteratorEnumeration<Object>(it);
+        return new IteratorEnumeration(it);
     }
     
     public String[] getParameterValues(final String name) {

@@ -38,7 +38,7 @@ class HttpPoolEntry extends PoolEntry<HttpRoute, OperatedClientConnection>
     }
     
     HttpRoute getPlannedRoute() {
-        return ((PoolEntry<HttpRoute, C>)this).getRoute();
+        return this.getRoute();
     }
     
     HttpRoute getEffectiveRoute() {
@@ -46,12 +46,12 @@ class HttpPoolEntry extends PoolEntry<HttpRoute, OperatedClientConnection>
     }
     
     public boolean isClosed() {
-        final OperatedClientConnection conn = ((PoolEntry<T, OperatedClientConnection>)this).getConnection();
+        final OperatedClientConnection conn = this.getConnection();
         return !conn.isOpen();
     }
     
     public void close() {
-        final OperatedClientConnection conn = ((PoolEntry<T, OperatedClientConnection>)this).getConnection();
+        final OperatedClientConnection conn = this.getConnection();
         try {
             conn.close();
         }

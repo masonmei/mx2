@@ -36,7 +36,7 @@ public class TraceClassVisitor extends ClassVisitor
     
     public TraceClassVisitor(final ClassVisitor cv, final String className, final InstrumentationContext context) {
         super(327680, cv);
-        this.tracedMethods = (Set<Method>)Sets.newHashSet();
+        this.tracedMethods = Sets.newHashSet();
         this.className = className;
         this.instrumentationContext = context;
         this.traceInfo = context.getTraceInformation();
@@ -47,7 +47,7 @@ public class TraceClassVisitor extends ClassVisitor
         if (!this.traceInfo.getTraceAnnotations().isEmpty()) {
             Agent.LOG.finer("Traced " + this.className + " methods " + this.tracedMethods);
             if (this.tracedMethods.size() != this.traceInfo.getTraceAnnotations().size()) {
-                final Set<Method> expected = (Set<Method>)Sets.newHashSet((Iterable<?>)this.traceInfo.getTraceAnnotations().keySet());
+                final Set<Method> expected = Sets.newHashSet(this.traceInfo.getTraceAnnotations().keySet());
                 expected.removeAll(this.tracedMethods);
                 Agent.LOG.finer("While tracing " + this.className + " the following methods were not traced: " + expected);
             }

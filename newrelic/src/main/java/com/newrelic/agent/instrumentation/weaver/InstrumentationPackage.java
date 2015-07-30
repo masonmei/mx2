@@ -78,18 +78,18 @@ public class InstrumentationPackage implements ClassResolver
     private final IAgentLogger logger;
     
     public InstrumentationPackage(final Instrumentation instrumentation, final IAgentLogger logger, final InstrumentationMetadata metaData, final JarInputStream jarStream) throws Exception {
-        this.abstractMethods = (Map<Method, String>)Maps.newHashMap();
-        this.weaveClasses = (Map<String, WeavedClassInfo>)Maps.newHashMap();
-        this.instrumentationInfo = (Map<String, WeavedClassInfo>)Maps.newHashMap();
-        this.newClasses = (Map<String, byte[]>)Maps.newHashMap();
-        this.newClassLoadOrder = (List<String>)Lists.newLinkedList();
-        this.skipClasses = (Set<String>)Sets.newHashSet();
+        this.abstractMethods = Maps.newHashMap();
+        this.weaveClasses = Maps.newHashMap();
+        this.instrumentationInfo = Maps.newHashMap();
+        this.newClasses = Maps.newHashMap();
+        this.newClassLoadOrder = Lists.newLinkedList();
+        this.skipClasses = Sets.newHashSet();
         this.closeables = new ConcurrentLinkedQueue<Closeable>();
         this.matcherBuilder = OptimizedClassMatcherBuilder.newBuilder();
         this.location = metaData.getLocation();
         this.instrumentation = instrumentation;
-        final Map<String, byte[]> classBytes = (Map<String, byte[]>)Maps.newHashMap();
-        final Map<String, InstrumentationClassVisitor> instrumentationClasses = (Map<String, InstrumentationClassVisitor>)Maps.newHashMap();
+        final Map<String, byte[]> classBytes = Maps.newHashMap();
+        final Map<String, InstrumentationClassVisitor> instrumentationClasses = Maps.newHashMap();
         this.implementationTitle = metaData.getImplementationTitle();
         this.metaData = metaData;
         this.logger = logger;
@@ -116,7 +116,7 @@ public class InstrumentationPackage implements ClassResolver
             logger.finer(this.implementationTitle + " does not contain any weaved classes.");
         }
         InstrumentationClassVisitor.performSecondPassProcessing(this, instrumentationClasses, this.weaveClasses, classBytes, this.newClassLoadOrder);
-        this.classNames = (Map<String, byte[]>)ImmutableMap.copyOf((Map<?, ?>)this.performThirdPassProcessing(classBytes, instrumentationClasses));
+        this.classNames = ImmutableMap.copyOf(this.performThirdPassProcessing(classBytes, instrumentationClasses));
         this.containsBootstrapMergeClasses = this.isBootstrapClassName(this.weaveClasses.keySet());
         if (this.containsBootstrapMergeClasses) {
             this.classAppender = ClassAppender.getBootstrapClassAppender(instrumentation);
@@ -129,7 +129,7 @@ public class InstrumentationPackage implements ClassResolver
     }
     
     private Map<String, byte[]> performThirdPassProcessing(final Map<String, byte[]> classBytes, final Map<String, InstrumentationClassVisitor> instrumentationClasses) {
-        final Map<String, String> renamedClasses = (Map<String, String>)Maps.newHashMap();
+        final Map<String, String> renamedClasses = Maps.newHashMap();
         for (final InstrumentationClassVisitor instrumentationClass : instrumentationClasses.values()) {
             if (instrumentationClass.isWeaveInstrumentation()) {
                 for (final InnerClassNode innerClass : instrumentationClass.innerClasses) {
@@ -144,9 +144,9 @@ public class InstrumentationPackage implements ClassResolver
     }
     
     private Map<String, byte[]> renameClasses(final Map<String, byte[]> classBytes, final Map<String, String> classesToRename, final Map<String, InstrumentationClassVisitor> instrumentationClasses) {
-        final Map<String, byte[]> actualClassNames = (Map<String, byte[]>)Maps.newHashMap();
-        final Map<String, Set<MethodWithAccess>> referencedClassMethods = (Map<String, Set<MethodWithAccess>>)Maps.newHashMap();
-        final Map<String, Set<MethodWithAccess>> referencedInterfaceMethods = (Map<String, Set<MethodWithAccess>>)Maps.newHashMap();
+        final Map<String, byte[]> actualClassNames = Maps.newHashMap();
+        final Map<String, Set<MethodWithAccess>> referencedClassMethods = Maps.newHashMap();
+        final Map<String, Set<MethodWithAccess>> referencedInterfaceMethods = Maps.newHashMap();
         final Remapper remapper = new SimpleRemapper(classesToRename);
         for (final Map.Entry<String, byte[]> entry : classBytes.entrySet()) {
             final ClassReader reader = new ClassReader(entry.getValue());
@@ -298,7 +298,7 @@ public class InstrumentationPackage implements ClassResolver
     }
     
     public Set<String> getClassNames() {
-        final Set<String> names = (Set<String>)Sets.newHashSet();
+        final Set<String> names = Sets.newHashSet();
         for (final String name : this.getClassBytes().keySet()) {
             names.add(Type.getObjectType(name).getClassName());
         }
@@ -377,7 +377,7 @@ public class InstrumentationPackage implements ClassResolver
         
         public GatherClassMethodMatchers(final ClassVisitor cv, final String className, final WeavedClassInfo instrumentationClass) {
             super(327680, cv);
-            this.methods = (List<Method>)Lists.newArrayList();
+            this.methods = Lists.newArrayList();
             this.className = className;
             this.matchType = instrumentationClass.getMatchType();
             this.instrumentationClass = instrumentationClass;
@@ -409,7 +409,7 @@ public class InstrumentationPackage implements ClassResolver
                     InstrumentationPackage.this.logger.fine(this.className + " is marked as a weaved class, but no methods are matched to be weaved.");
                     return;
                 }
-                methods = (List<Method>)Lists.newArrayList((Iterable<?>)this.instrumentationClass.getTracedMethods().keySet());
+                methods = Lists.newArrayList(this.instrumentationClass.getTracedMethods().keySet());
             }
             final ClassMatcher classMatcher = InstrumentationPackage.getClassMatcher(this.matchType, this.className);
             for (final Method m : methods) {

@@ -1,231 +1,288 @@
-// 
-// Decompiled by Procyon v0.5.29
-// 
+/*
+ * Javassist, a Java-bytecode translator toolkit.
+ * Copyright (C) 1999- Shigeru Chiba. All Rights Reserved.
+ *
+ * The contents of this file are subject to the Mozilla Public License Version
+ * 1.1 (the "License"); you may not use this file except in compliance with
+ * the License.  Alternatively, the contents of this file may be used under
+ * the terms of the GNU Lesser General Public License Version 2.1 or later,
+ * or the Apache License Version 2.0.
+ *
+ * Software distributed under the License is distributed on an "AS IS" basis,
+ * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
+ * for the specific language governing rights and limitations under the
+ * License.
+ */
 
 package com.newrelic.agent.deps.javassist.bytecode;
 
-import java.util.Iterator;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.ArrayList;
-import java.io.DataOutputStream;
-import java.util.Map;
-import java.io.IOException;
 import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.util.Map;
+import java.util.ArrayList;
+import java.util.ListIterator;
+import java.util.List;
+import java.util.Iterator;
 
-public class AttributeInfo
-{
+// Note: if you define a new subclass of AttributeInfo, then
+//       update AttributeInfo.read(), .copy(), and (maybe) write().
+
+/**
+ * <code>attribute_info</code> structure.
+ */
+public class AttributeInfo {
     protected ConstPool constPool;
     int name;
     byte[] info;
-    
-    protected AttributeInfo(final ConstPool cp, final int attrname, final byte[] attrinfo) {
-        this.constPool = cp;
-        this.name = attrname;
-        this.info = attrinfo;
+
+    protected AttributeInfo(ConstPool cp, int attrname, byte[] attrinfo) {
+        constPool = cp;
+        name = attrname;
+        info = attrinfo;
     }
-    
-    protected AttributeInfo(final ConstPool cp, final String attrname) {
-        this(cp, attrname, null);
+
+    protected AttributeInfo(ConstPool cp, String attrname) {
+        this(cp, attrname, (byte[])null);
     }
-    
-    public AttributeInfo(final ConstPool cp, final String attrname, final byte[] attrinfo) {
+
+    /**
+     * Constructs an <code>attribute_info</code> structure.
+     *
+     * @param cp                constant pool table
+     * @param attrname          attribute name
+     * @param attrinfo          <code>info</code> field
+     *                          of <code>attribute_info</code> structure.
+     */
+    public AttributeInfo(ConstPool cp, String attrname, byte[] attrinfo) {
         this(cp, cp.addUtf8Info(attrname), attrinfo);
     }
-    
-    protected AttributeInfo(final ConstPool cp, final int n, final DataInputStream in) throws IOException {
-        this.constPool = cp;
-        this.name = n;
-        final int len = in.readInt();
-        this.info = new byte[len];
-        if (len > 0) {
-            in.readFully(this.info);
-        }
+
+    protected AttributeInfo(ConstPool cp, int n, DataInputStream in)
+            throws IOException
+    {
+        constPool = cp;
+        name = n;
+        int len = in.readInt();
+        info = new byte[len];
+        if (len > 0)
+            in.readFully(info);
     }
-    
-    static AttributeInfo read(final ConstPool cp, final DataInputStream in) throws IOException {
-        final int name = in.readUnsignedShort();
-        final String nameStr = cp.getUtf8Info(name);
+
+    static AttributeInfo read(ConstPool cp, DataInputStream in)
+            throws IOException
+    {
+        int name = in.readUnsignedShort();
+        String nameStr = cp.getUtf8Info(name);
         if (nameStr.charAt(0) < 'L') {
-            if (nameStr.equals("AnnotationDefault")) {
+            if (nameStr.equals(AnnotationDefaultAttribute.tag))
                 return new AnnotationDefaultAttribute(cp, name, in);
-            }
-            if (nameStr.equals("BootstrapMethods")) {
+            else if (nameStr.equals(BootstrapMethodsAttribute.tag))
                 return new BootstrapMethodsAttribute(cp, name, in);
-            }
-            if (nameStr.equals("Code")) {
-                return new CodeAttribute(cp, name, in);
-            }
-            if (nameStr.equals("ConstantValue")) {
-                return new ConstantAttribute(cp, name, in);
-            }
-            if (nameStr.equals("Deprecated")) {
-                return new DeprecatedAttribute(cp, name, in);
-            }
-            if (nameStr.equals("EnclosingMethod")) {
-                return new EnclosingMethodAttribute(cp, name, in);
-            }
-            if (nameStr.equals("Exceptions")) {
-                return new ExceptionsAttribute(cp, name, in);
-            }
-            if (nameStr.equals("InnerClasses")) {
-                return new InnerClassesAttribute(cp, name, in);
-            }
+            else if (nameStr.equals(CodeAttribute.tag))
+                    return new CodeAttribute(cp, name, in);
+                else if (nameStr.equals(ConstantAttribute.tag))
+                        return new ConstantAttribute(cp, name, in);
+                    else if (nameStr.equals(DeprecatedAttribute.tag))
+                            return new DeprecatedAttribute(cp, name, in);
+                        else if (nameStr.equals(EnclosingMethodAttribute.tag))
+                                return new EnclosingMethodAttribute(cp, name, in);
+                            else if (nameStr.equals(ExceptionsAttribute.tag))
+                                    return new ExceptionsAttribute(cp, name, in);
+                                else if (nameStr.equals(InnerClassesAttribute.tag))
+                                        return new InnerClassesAttribute(cp, name, in);
         }
         else {
-            if (nameStr.equals("LineNumberTable")) {
+            /* Note that the names of Annotations attributes begin with 'R'. 
+             */
+            if (nameStr.equals(LineNumberAttribute.tag))
                 return new LineNumberAttribute(cp, name, in);
-            }
-            if (nameStr.equals("LocalVariableTable")) {
+            else if (nameStr.equals(LocalVariableAttribute.tag))
                 return new LocalVariableAttribute(cp, name, in);
-            }
-            if (nameStr.equals("LocalVariableTypeTable")) {
-                return new LocalVariableTypeAttribute(cp, name, in);
-            }
-            if (nameStr.equals("RuntimeVisibleAnnotations") || nameStr.equals("RuntimeInvisibleAnnotations")) {
-                return new AnnotationsAttribute(cp, name, in);
-            }
-            if (nameStr.equals("RuntimeVisibleParameterAnnotations") || nameStr.equals("RuntimeInvisibleParameterAnnotations")) {
-                return new ParameterAnnotationsAttribute(cp, name, in);
-            }
-            if (nameStr.equals("Signature")) {
-                return new SignatureAttribute(cp, name, in);
-            }
-            if (nameStr.equals("SourceFile")) {
-                return new SourceFileAttribute(cp, name, in);
-            }
-            if (nameStr.equals("Synthetic")) {
-                return new SyntheticAttribute(cp, name, in);
-            }
-            if (nameStr.equals("StackMap")) {
-                return new StackMap(cp, name, in);
-            }
-            if (nameStr.equals("StackMapTable")) {
-                return new StackMapTable(cp, name, in);
-            }
+            else if (nameStr.equals(LocalVariableTypeAttribute.tag))
+                    return new LocalVariableTypeAttribute(cp, name, in);
+                else if (nameStr.equals(AnnotationsAttribute.visibleTag)
+                            || nameStr.equals(AnnotationsAttribute.invisibleTag)) {
+                        // RuntimeVisibleAnnotations or RuntimeInvisibleAnnotations
+                        return new AnnotationsAttribute(cp, name, in);
+                    }
+                    else if (nameStr.equals(ParameterAnnotationsAttribute.visibleTag)
+                                || nameStr.equals(ParameterAnnotationsAttribute.invisibleTag))
+                            return new ParameterAnnotationsAttribute(cp, name, in);
+                        else if (nameStr.equals(SignatureAttribute.tag))
+                                return new SignatureAttribute(cp, name, in);
+                            else if (nameStr.equals(SourceFileAttribute.tag))
+                                    return new SourceFileAttribute(cp, name, in);
+                                else if (nameStr.equals(SyntheticAttribute.tag))
+                                        return new SyntheticAttribute(cp, name, in);
+                                    else if (nameStr.equals(StackMap.tag))
+                                            return new StackMap(cp, name, in);
+                                        else if (nameStr.equals(StackMapTable.tag))
+                                                return new StackMapTable(cp, name, in);
         }
+
         return new AttributeInfo(cp, name, in);
     }
-    
+
+    /**
+     * Returns an attribute name.
+     */
     public String getName() {
-        return this.constPool.getUtf8Info(this.name);
+        return constPool.getUtf8Info(name);
     }
-    
-    public ConstPool getConstPool() {
-        return this.constPool;
-    }
-    
+
+    /**
+     * Returns a constant pool table.
+     */
+    public ConstPool getConstPool() { return constPool; }
+
+    /**
+     * Returns the length of this <code>attribute_info</code>
+     * structure.
+     * The returned value is <code>attribute_length + 6</code>.
+     */
     public int length() {
-        return this.info.length + 6;
+        return info.length + 6;
     }
-    
-    public byte[] get() {
-        return this.info;
-    }
-    
-    public void set(final byte[] newinfo) {
-        this.info = newinfo;
-    }
-    
-    public AttributeInfo copy(final ConstPool newCp, final Map classnames) {
-        final int s = this.info.length;
-        final byte[] srcInfo = this.info;
-        final byte[] newInfo = new byte[s];
-        for (int i = 0; i < s; ++i) {
+
+    /**
+     * Returns the <code>info</code> field
+     * of this <code>attribute_info</code> structure.
+     *
+     * <p>This method is not available if the object is an instance
+     * of <code>CodeAttribute</code>.
+     */
+    public byte[] get() { return info; }
+
+    /**
+     * Sets the <code>info</code> field
+     * of this <code>attribute_info</code> structure.
+     *
+     * <p>This method is not available if the object is an instance
+     * of <code>CodeAttribute</code>.
+     */
+    public void set(byte[] newinfo) { info = newinfo; }
+
+    /**
+     * Makes a copy.  Class names are replaced according to the
+     * given <code>Map</code> object.
+     *
+     * @param newCp     the constant pool table used by the new copy.
+     * @param classnames        pairs of replaced and substituted
+     *                          class names.
+     */
+    public AttributeInfo copy(ConstPool newCp, Map classnames) {
+        int s = info.length;
+        byte[] srcInfo = info;
+        byte[] newInfo = new byte[s];
+        for (int i = 0; i < s; ++i)
             newInfo[i] = srcInfo[i];
-        }
-        return new AttributeInfo(newCp, this.getName(), newInfo);
+
+        return new AttributeInfo(newCp, getName(), newInfo);
     }
-    
-    void write(final DataOutputStream out) throws IOException {
-        out.writeShort(this.name);
-        out.writeInt(this.info.length);
-        if (this.info.length > 0) {
-            out.write(this.info);
-        }
+
+    void write(DataOutputStream out) throws IOException {
+        out.writeShort(name);
+        out.writeInt(info.length);
+        if (info.length > 0)
+            out.write(info);
     }
-    
-    static int getLength(final ArrayList list) {
+
+    static int getLength(ArrayList list) {
         int size = 0;
-        for (int n = list.size(), i = 0; i < n; ++i) {
-            final AttributeInfo attr = list.get(i);
+        int n = list.size();
+        for (int i = 0; i < n; ++i) {
+            AttributeInfo attr = (AttributeInfo)list.get(i);
             size += attr.length();
         }
+
         return size;
     }
-    
-    static AttributeInfo lookup(final ArrayList list, final String name) {
-        if (list == null) {
+
+    static AttributeInfo lookup(ArrayList list, String name) {
+        if (list == null)
             return null;
-        }
-        final ListIterator iterator = list.listIterator();
+
+        ListIterator iterator = list.listIterator();
         while (iterator.hasNext()) {
-            final AttributeInfo ai = iterator.next();
-            if (ai.getName().equals(name)) {
+            AttributeInfo ai = (AttributeInfo)iterator.next();
+            if (ai.getName().equals(name))
                 return ai;
-            }
         }
-        return null;
+
+        return null;            // no such attribute
     }
-    
-    static synchronized void remove(final ArrayList list, final String name) {
-        if (list == null) {
+
+    static synchronized void remove(ArrayList list, String name) {
+        if (list == null)
             return;
-        }
-        final ListIterator iterator = list.listIterator();
+
+        ListIterator iterator = list.listIterator();
         while (iterator.hasNext()) {
-            final AttributeInfo ai = iterator.next();
-            if (ai.getName().equals(name)) {
+            AttributeInfo ai = (AttributeInfo)iterator.next();
+            if (ai.getName().equals(name))
                 iterator.remove();
-            }
         }
     }
-    
-    static void writeAll(final ArrayList list, final DataOutputStream out) throws IOException {
-        if (list == null) {
+
+    static void writeAll(ArrayList list, DataOutputStream out)
+            throws IOException
+    {
+        if (list == null)
             return;
-        }
-        for (int n = list.size(), i = 0; i < n; ++i) {
-            final AttributeInfo attr = list.get(i);
+
+        int n = list.size();
+        for (int i = 0; i < n; ++i) {
+            AttributeInfo attr = (AttributeInfo)list.get(i);
             attr.write(out);
         }
     }
-    
-    static ArrayList copyAll(final ArrayList list, final ConstPool cp) {
-        if (list == null) {
+
+    static ArrayList copyAll(ArrayList list, ConstPool cp) {
+        if (list == null)
             return null;
-        }
-        final ArrayList newList = new ArrayList();
-        for (int n = list.size(), i = 0; i < n; ++i) {
-            final AttributeInfo attr = list.get(i);
+
+        ArrayList newList = new ArrayList();
+        int n = list.size();
+        for (int i = 0; i < n; ++i) {
+            AttributeInfo attr = (AttributeInfo)list.get(i);
             newList.add(attr.copy(cp, null));
         }
+
         return newList;
     }
-    
-    void renameClass(final String oldname, final String newname) {
-    }
-    
-    void renameClass(final Map classnames) {
-    }
-    
-    static void renameClass(final List attributes, final String oldname, final String newname) {
-        for (final AttributeInfo ai : attributes) {
+
+    /* The following two methods are used to implement
+     * ClassFile.renameClass().
+     * Only CodeAttribute, LocalVariableAttribute,
+     * AnnotationsAttribute, and SignatureAttribute
+     * override these methods.
+     */
+    void renameClass(String oldname, String newname) {}
+    void renameClass(Map classnames) {}
+
+    static void renameClass(List attributes, String oldname, String newname) {
+        Iterator iterator = attributes.iterator();
+        while (iterator.hasNext()) {
+            AttributeInfo ai = (AttributeInfo)iterator.next();
             ai.renameClass(oldname, newname);
         }
     }
-    
-    static void renameClass(final List attributes, final Map classnames) {
-        for (final AttributeInfo ai : attributes) {
+
+    static void renameClass(List attributes, Map classnames) {
+        Iterator iterator = attributes.iterator();
+        while (iterator.hasNext()) {
+            AttributeInfo ai = (AttributeInfo)iterator.next();
             ai.renameClass(classnames);
         }
     }
-    
-    void getRefClasses(final Map classnames) {
-    }
-    
-    static void getRefClasses(final List attributes, final Map classnames) {
-        for (final AttributeInfo ai : attributes) {
+
+    void getRefClasses(Map classnames) {}
+
+    static void getRefClasses(List attributes, Map classnames) {
+        Iterator iterator = attributes.iterator();
+        while (iterator.hasNext()) {
+            AttributeInfo ai = (AttributeInfo)iterator.next();
             ai.getRefClasses(classnames);
         }
     }

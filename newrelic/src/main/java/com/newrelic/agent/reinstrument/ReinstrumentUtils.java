@@ -32,7 +32,7 @@ public class ReinstrumentUtils
     public static void checkClassExistsAndRetransformClasses(final ReinstrumentResult result, final List<ExtensionClassAndMethodMatcher> pcs, final Extension ext, final Set<Class<?>> classesToRetransform) {
         if (!pcs.isEmpty()) {
             final Set<ClassLoader> loaders = new HashSet<ClassLoader>();
-            final Map<String, Class<?>> toRetransform = (Map<String, Class<?>>)Maps.newHashMap();
+            final Map<String, Class<?>> toRetransform = Maps.newHashMap();
             getLoadedClassData(pcs, loaders, toRetransform);
             checkInputClasses(result, loaders, ext, toRetransform);
         }
@@ -76,7 +76,7 @@ public class ReinstrumentUtils
     }
     
     private static Set<String> getClassNames(final Set<Class<?>> classes) {
-        final Set<String> names = (Set<String>)Sets.newHashSet();
+        final Set<String> names = Sets.newHashSet();
         for (final Class<?> clazz : classes) {
             names.add(clazz.getName());
         }
@@ -177,7 +177,7 @@ public class ReinstrumentUtils
     
     private static boolean foundMethod(final Extension.Instrumentation.Pointcut.Method method, final Set<Method> actualMethods) {
         try {
-            final MethodMatcher methodMatcher = MethodMatcherUtility.createMethodMatcher("BogusClass", method, (Map<String, MethodMapper>)Maps.newHashMap(), "");
+            final MethodMatcher methodMatcher = MethodMatcherUtility.createMethodMatcher("BogusClass", method, Maps.<String,MethodMapper>newHashMap(), "");
             for (final Method m : actualMethods) {
                 if (methodMatcher.matches(-1, m.getName(), m.getDescriptor(), MethodMatcher.UNSPECIFIED_ANNOTATIONS)) {
                     return true;

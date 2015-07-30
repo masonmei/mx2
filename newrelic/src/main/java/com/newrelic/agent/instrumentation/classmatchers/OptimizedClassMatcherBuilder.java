@@ -31,8 +31,8 @@ public class OptimizedClassMatcherBuilder
     private OptimizedClassMatcherBuilder() {
         this.methodMatchers = Multimaps.newSetMultimap(new HashMap<MethodMatcher, Collection<ClassAndMethodMatcher>>(), OptimizedClassMatcherBuilder.CLASS_AND_METHOD_MATCHER_SET_SUPPLIER);
         this.methods = Multimaps.newSetMultimap(new HashMap<Method, Collection<ClassAndMethodMatcher>>(), OptimizedClassMatcherBuilder.CLASS_AND_METHOD_MATCHER_SET_SUPPLIER);
-        this.methodAnnotationMatchers = (Set<String>)Sets.newHashSet();
-        this.exactClassNames = (Set<String>)Sets.newHashSet();
+        this.methodAnnotationMatchers = Sets.newHashSet();
+        this.exactClassNames = Sets.newHashSet();
         this.exactClassMatch = true;
     }
     
@@ -82,7 +82,7 @@ public class OptimizedClassMatcherBuilder
                 this.methodMatchers.put(entry.getKey(), entry.getValue());
             }
             for (final Map.Entry<Method, Collection<ClassAndMethodMatcher>> entry2 : matcher.methods.entrySet()) {
-                this.methods.putAll(entry2.getKey(), (Iterable<?>)entry2.getValue());
+                this.methods.putAll(entry2.getKey(), entry2.getValue());
             }
             if (null != matcher.exactClassNames) {
                 this.exactClassNames.addAll(matcher.exactClassNames);

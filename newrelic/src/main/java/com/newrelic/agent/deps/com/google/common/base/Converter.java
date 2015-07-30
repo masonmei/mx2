@@ -234,12 +234,12 @@ public abstract class Converter<A, B> implements Function<A, B>
         
         @Override
         protected B doForward(final A a) {
-            return (B)this.forwardFunction.apply((Object)a);
+            return this.forwardFunction.apply(a);
         }
         
         @Override
         protected A doBackward(final B b) {
-            return (A)this.backwardFunction.apply((Object)b);
+            return this.backwardFunction.apply(b);
         }
         
         @Override

@@ -40,7 +40,7 @@ public class WebRequestDispatcher extends DefaultDispatcher implements WebRespon
     
     public WebRequestDispatcher(final Request request, final Response response, final Transaction transaction) {
         super(transaction);
-        final boolean isLastStatusCodePolicy = (boolean)transaction.getAgentConfig().getValue("last_status_code_policy", (Object)Boolean.TRUE);
+        final boolean isLastStatusCodePolicy = (Boolean)transaction.getAgentConfig().getValue("last_status_code_policy", (Object)Boolean.TRUE);
         this.statusCodePolicy = (isLastStatusCodePolicy ? WebRequestDispatcher.LAST_STATUS_CODE_POLICY : WebRequestDispatcher.ERROR_STATUS_CODE_POLICY);
         this.request = request;
         this.response = response;

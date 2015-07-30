@@ -103,14 +103,14 @@ public class AttributesConfigUtil
     }
     
     protected static Set<String> getExcluded(final AgentConfig config, final List<String> baseList, final String dest) {
-        final Set<String> output = (Set<String>)Sets.newHashSet();
+        final Set<String> output = Sets.newHashSet();
         output.addAll(baseList);
         output.addAll(getBaseList(config, dest + "." + "attributes.exclude"));
         return output;
     }
     
     protected static Set<String> getIncluded(final AgentConfig config, final List<String> baseList, final String dest) {
-        final Set<String> output = (Set<String>)Sets.newHashSet();
+        final Set<String> output = Sets.newHashSet();
         output.addAll(baseList);
         output.addAll(getBaseList(config, dest + "." + "attributes.include"));
         return output;

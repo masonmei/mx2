@@ -22,10 +22,10 @@ public class AttributesService extends AbstractService implements AgentConfigLis
     public AttributesService() {
         super(AttributesService.class.getSimpleName());
         final AgentConfig config = ServiceFactory.getConfigService().getDefaultAgentConfig();
-        this.enabled = (boolean)config.getValue("attributes.enabled", (Object)Boolean.TRUE);
+        this.enabled = (Boolean)config.getValue("attributes.enabled", (Object)Boolean.TRUE);
         this.defaultAppName = config.getApplicationName();
         this.defaultFilter = new AttributesFilter(config);
-        this.appNamesToFilters = (Map<String, AttributesFilter>)Maps.newConcurrentMap();
+        this.appNamesToFilters = Maps.newConcurrentMap();
         ServiceFactory.getConfigService().addIAgentConfigListener(this);
     }
     

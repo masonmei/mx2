@@ -28,7 +28,6 @@ import java.security.SecureRandom;
 import java.security.KeyStore;
 import com.newrelic.agent.deps.org.apache.http.util.TextUtils;
 import com.newrelic.agent.deps.org.apache.http.conn.scheme.HostNameResolver;
-import javax.net.ssl.SSLSocketFactory;
 import com.newrelic.agent.deps.org.apache.http.annotation.ThreadSafe;
 import com.newrelic.agent.deps.org.apache.http.conn.scheme.LayeredSocketFactory;
 import com.newrelic.agent.deps.org.apache.http.conn.scheme.LayeredSchemeSocketFactory;

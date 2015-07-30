@@ -69,13 +69,13 @@ public class Store
         final Multimap<String, String> mmap = this.get(index);
         final IterableChain<String> result = new IterableChain<String>();
         for (final String key : keys) {
-            ((IterableChain<Object>)result).addAll(mmap.get(key));
+            result.addAll(mmap.get(key));
         }
         return result;
     }
     
     private Iterable<String> getAllIncluding(final String index, final Iterable<String> keys, final IterableChain<String> result) {
-        ((IterableChain<Object>)result).addAll(keys);
+        result.addAll(keys);
         for (final String key : keys) {
             final Iterable<String> values = this.get(index, key);
             if (values.iterator().hasNext()) {
@@ -98,7 +98,7 @@ public class Store
         private final List<Iterable<T>> chain;
         
         private IterableChain() {
-            this.chain = (List<Iterable<T>>)Lists.newArrayList();
+            this.chain = Lists.newArrayList();
         }
         
         private void addAll(final Iterable<T> iterable) {
@@ -106,7 +106,7 @@ public class Store
         }
         
         public Iterator<T> iterator() {
-            return Iterables.concat((Iterable<? extends Iterable<? extends T>>)this.chain).iterator();
+            return Iterables.concat(this.chain).iterator();
         }
     }
 }

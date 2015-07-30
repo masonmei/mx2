@@ -88,7 +88,7 @@ public class ApdexStatsImpl implements ApdexStats
     
     public void writeJSONString(final Writer writer) throws IOException {
         final double apdexT = Long.valueOf(this.apdexTInMillis) / 1000.0;
-        final List<Number> data = Arrays.asList(this.satisfying, this.tolerating, this.frustrating, apdexT, apdexT, ApdexStatsImpl.ZERO);
+        final List<Number> data = Arrays.<Number>asList(this.satisfying, this.tolerating, this.frustrating, apdexT, apdexT, ApdexStatsImpl.ZERO);
         JSONArray.writeJSONString(data, writer);
     }
     

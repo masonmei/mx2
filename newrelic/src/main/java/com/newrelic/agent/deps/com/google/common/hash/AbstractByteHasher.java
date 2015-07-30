@@ -1,90 +1,122 @@
-// 
-// Decompiled by Procyon v0.5.29
-// 
+/*
+ * Copyright (C) 2012 The Guava Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package com.newrelic.agent.deps.com.google.common.hash;
 
-import com.newrelic.agent.deps.com.google.common.base.Preconditions;
-import java.nio.ByteOrder;
-import java.nio.ByteBuffer;
+import static com.newrelic.agent.deps.com.google.common.base.Preconditions.checkNotNull;
+import static com.newrelic.agent.deps.com.google.common.base.Preconditions.checkPositionIndexes;
 
-abstract class AbstractByteHasher extends AbstractHasher
-{
-    private final ByteBuffer scratch;
-    
-    AbstractByteHasher() {
-        this.scratch = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN);
+import com.newrelic.agent.deps.com.google.common.primitives.Chars;
+import com.newrelic.agent.deps.com.google.common.primitives.Ints;
+import com.newrelic.agent.deps.com.google.common.primitives.Longs;
+import com.newrelic.agent.deps.com.google.common.primitives.Shorts;
+
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+
+/**
+ * Abstract {@link Hasher} that handles converting primitives to bytes using a scratch {@code
+ * ByteBuffer} and streams all bytes to a sink to compute the hash.
+ *
+ * @author Colin Decker
+ */
+abstract class AbstractByteHasher extends AbstractHasher {
+
+    private final ByteBuffer scratch = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN);
+
+    /**
+     * Updates this hasher with the given byte.
+     */
+    protected abstract void update(byte b);
+
+    /**
+     * Updates this hasher with the given bytes.
+     */
+    protected void update(byte[] b) {
+        update(b, 0, b.length);
     }
-    
-    protected abstract void update(final byte p0);
-    
-    protected void update(final byte[] b) {
-        this.update(b, 0, b.length);
-    }
-    
-    protected void update(final byte[] b, final int off, final int len) {
-        for (int i = off; i < off + len; ++i) {
-            this.update(b[i]);
+
+    /**
+     * Updates this hasher with {@code len} bytes starting at {@code off} in the given buffer.
+     */
+    protected void update(byte[] b, int off, int len) {
+        for (int i = off; i < off + len; i++) {
+            update(b[i]);
         }
     }
-    
+
     @Override
-    public Hasher putByte(final byte b) {
-        this.update(b);
+    public Hasher putByte(byte b) {
+        update(b);
         return this;
     }
-    
+
     @Override
-    public Hasher putBytes(final byte[] bytes) {
-        Preconditions.checkNotNull(bytes);
-        this.update(bytes);
+    public Hasher putBytes(byte[] bytes) {
+        checkNotNull(bytes);
+        update(bytes);
         return this;
     }
-    
+
     @Override
-    public Hasher putBytes(final byte[] bytes, final int off, final int len) {
-        Preconditions.checkPositionIndexes(off, off + len, bytes.length);
-        this.update(bytes, off, len);
+    public Hasher putBytes(byte[] bytes, int off, int len) {
+        checkPositionIndexes(off, off + len, bytes.length);
+        update(bytes, off, len);
         return this;
     }
-    
-    private Hasher update(final int bytes) {
+
+    /**
+     * Updates the sink with the given number of bytes from the buffer.
+     */
+    private Hasher update(int bytes) {
         try {
-            this.update(this.scratch.array(), 0, bytes);
-        }
-        finally {
-            this.scratch.clear();
+            update(scratch.array(), 0, bytes);
+        } finally {
+            scratch.clear();
         }
         return this;
     }
-    
+
     @Override
-    public Hasher putShort(final short s) {
-        this.scratch.putShort(s);
-        return this.update(2);
+    public Hasher putShort(short s) {
+        scratch.putShort(s);
+        return update(Shorts.BYTES);
     }
-    
+
     @Override
-    public Hasher putInt(final int i) {
-        this.scratch.putInt(i);
-        return this.update(4);
+    public Hasher putInt(int i) {
+        scratch.putInt(i);
+        return update(Ints.BYTES);
     }
-    
+
     @Override
-    public Hasher putLong(final long l) {
-        this.scratch.putLong(l);
-        return this.update(8);
+    public Hasher putLong(long l) {
+        scratch.putLong(l);
+        return update(Longs.BYTES);
     }
-    
+
     @Override
-    public Hasher putChar(final char c) {
-        this.scratch.putChar(c);
-        return this.update(2);
+    public Hasher putChar(char c) {
+        scratch.putChar(c);
+        return update(Chars.BYTES);
     }
-    
+
     @Override
-    public <T> Hasher putObject(final T instance, final Funnel<? super T> funnel) {
-        funnel.funnel((Object)instance, (PrimitiveSink)this);
+    public <T> Hasher putObject(T instance, Funnel<? super T> funnel) {
+        funnel.funnel(instance, this);
         return this;
     }
 }

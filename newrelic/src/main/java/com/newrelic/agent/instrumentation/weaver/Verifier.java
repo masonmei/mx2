@@ -60,16 +60,16 @@ public class Verifier
         this.referencedClassMethods = Collections.emptyMap();
         this.referencedInterfaceMethods = Collections.emptyMap();
         this.classLoaders = CacheBuilder.newBuilder().weakKeys().expireAfterAccess(5L, TimeUnit.MINUTES).build();
-        this.classLoaderLocks = CacheBuilder.newBuilder().weakKeys().expireAfterAccess(1L, TimeUnit.MINUTES).build((CacheLoader<? super ClassLoader, AtomicInteger>)new CacheLoader<ClassLoader, AtomicInteger>() {
+        this.classLoaderLocks = CacheBuilder.newBuilder().weakKeys().expireAfterAccess(1L, TimeUnit.MINUTES).build(new CacheLoader<ClassLoader, AtomicInteger>() {
             public AtomicInteger load(final ClassLoader key) throws Exception {
                 return new AtomicInteger();
             }
         });
-        this.resolvedClasses = (Map<Type, ClassStructure>)Maps.newConcurrentMap();
+        this.resolvedClasses = Maps.newConcurrentMap();
     }
     
     public Map<Type, ClassStructure> getResolvedClasses() {
-        return Collections.unmodifiableMap((Map<? extends Type, ? extends ClassStructure>)this.resolvedClasses);
+        return Collections.unmodifiableMap(this.resolvedClasses);
     }
     
     public String getImplementationTitle() {
@@ -136,8 +136,8 @@ public class Verifier
     }
     
     private Boolean doVerify(final ClassAppender classAppender, final ClassLoader loader, final Map<String, byte[]> classesInNewJar, final List<String> newClassLoadOrder) {
-        final Map<String, ClassStructure> resolvedClasses = (Map<String, ClassStructure>)Maps.newHashMap();
-        final Set<String> unresolvedClasses = (Set<String>)Sets.newHashSet();
+        final Map<String, ClassStructure> resolvedClasses = Maps.newHashMap();
+        final Set<String> unresolvedClasses = Sets.newHashSet();
         this.resolveWeaveClasses(loader, unresolvedClasses);
         if (!unresolvedClasses.isEmpty()) {
             this.instrumentationPackage.getLogger().finer("Skipping " + this.getImplementationTitle() + " instrumentation.  Unresolved classes: " + unresolvedClasses);
@@ -152,9 +152,9 @@ public class Verifier
         resolve(this.instrumentationPackage.getLogger(), this.classStructureResolver, this.referencedClassMethods, loader, resolvedClasses, unresolvedClasses, false);
         resolve(this.instrumentationPackage.getLogger(), this.classStructureResolver, this.referencedInterfaceMethods, loader, resolvedClasses, unresolvedClasses, true);
         unresolvedClasses.removeAll(resolvedClasses.keySet());
-        final Map<String, Set<MethodWithAccess>> allReferenced = (Map<String, Set<MethodWithAccess>>)Maps.newHashMap((Map<?, ?>)this.referencedClassMethods);
+        final Map<String, Set<MethodWithAccess>> allReferenced = Maps.newHashMap(this.referencedClassMethods);
         allReferenced.putAll(this.referencedInterfaceMethods);
-        final Set<String> set = (Set<String>)Sets.newHashSet((Iterable<?>)unresolvedClasses);
+        final Set<String> set = Sets.newHashSet(unresolvedClasses);
         set.removeAll(classesInNewJar.keySet());
         if (!set.isEmpty()) {
             this.instrumentationPackage.getLogger().finer("Skipping " + this.getImplementationTitle() + " instrumentation.  Unresolved classes: " + set);
@@ -177,7 +177,7 @@ public class Verifier
                 this.instrumentationPackage.getLogger().log(Level.FINER, "Verifier error", ex);
             }
         }
-        final Map<String, byte[]> copy = (Map<String, byte[]>)Maps.newHashMap((Map<?, ?>)classesInNewJar);
+        final Map<String, byte[]> copy = Maps.newHashMap(classesInNewJar);
         copy.keySet().retainAll(unresolvedClasses);
         if (!copy.isEmpty()) {
             try {
@@ -254,7 +254,7 @@ public class Verifier
     private void verifyMethods(final ClassLoader loader, final Set<MethodWithAccess> methods, final ClassStructure classStructure) throws IOException {
         this.resolvedClasses.put(classStructure.getType(), classStructure);
         final Set<Method> classStructureMethods = classStructure.getMethods();
-        final Set<MethodWithAccess> methodsInClassStructure = (Set<MethodWithAccess>)Sets.newHashSet();
+        final Set<MethodWithAccess> methodsInClassStructure = Sets.newHashSet();
         for (final MethodWithAccess methodWithAccess : methods) {
             final Method method = methodWithAccess.getMethod();
             if (classStructureMethods.contains(method) && classStructure.isStatic(method) == methodWithAccess.isStatic()) {
@@ -278,7 +278,7 @@ public class Verifier
     }
     
     private void loadClasses(final ClassAppender classAppender, final ClassLoader loader, final Map<String, byte[]> classBytes, final List<String> newClassLoadOrder) throws IOException {
-        final List<String> loadedClasses = (List<String>)Lists.newArrayList();
+        final List<String> loadedClasses = Lists.newArrayList();
         for (final Map.Entry<String, byte[]> nameAndBytes : classBytes.entrySet()) {
             try {
                 final Class<?> clazz = loader.loadClass(Type.getObjectType(nameAndBytes.getKey()).getClassName());
@@ -345,7 +345,7 @@ public class Verifier
     }
     
     void setReferences(final Map<String, Set<MethodWithAccess>> referencedClassMethods, final Map<String, Set<MethodWithAccess>> referencedInterfaceMethods) {
-        this.referencedClassMethods = Collections.unmodifiableMap((Map<? extends String, ? extends Set<MethodWithAccess>>)referencedClassMethods);
-        this.referencedInterfaceMethods = Collections.unmodifiableMap((Map<? extends String, ? extends Set<MethodWithAccess>>)referencedInterfaceMethods);
+        this.referencedClassMethods = Collections.unmodifiableMap(referencedClassMethods);
+        this.referencedInterfaceMethods = Collections.unmodifiableMap(referencedInterfaceMethods);
     }
 }

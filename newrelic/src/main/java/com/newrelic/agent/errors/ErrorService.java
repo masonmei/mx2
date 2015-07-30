@@ -274,7 +274,7 @@ public class ErrorService
         final AgentConfig config = ServiceFactory.getConfigService().getDefaultAgentConfig();
         final Object exceptionHandlers = config.getErrorCollectorConfig().getProperty("exception_handlers");
         if (exceptionHandlers == null) {
-            return (Collection<? extends PointCut>)Collections.emptyList();
+            return Collections.emptyList();
         }
         final Collection<PointCut> pointcuts = new ArrayList<PointCut>();
         if (exceptionHandlers instanceof Collection) {

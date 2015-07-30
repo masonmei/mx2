@@ -44,7 +44,7 @@ abstract class ClassAppender
     }
     
     public static ClassAppender getSystemClassAppender() {
-        Method defineClassMethod;
+        final Method defineClassMethod;
         try {
             defineClassMethod = ClassLoader.class.getDeclaredMethod("defineClass", String.class, byte[].class, Integer.TYPE, Integer.TYPE, ProtectionDomain.class);
             defineClassMethod.setAccessible(true);
@@ -68,13 +68,13 @@ abstract class ClassAppender
             
             private List<ClassDefinition> loadClassesInTopologicalOrder(final ClassLoader loader, final Map<String, byte[]> classBytesMap, final List<String> loadOrderHint) throws IOException {
                 final ProtectionDomain protectionDomain = BootstrapAgent.class.getProtectionDomain();
-                final List<ClassDefinition> existingClasses = (List<ClassDefinition>)Lists.newArrayList();
+                final List<ClassDefinition> existingClasses = Lists.newArrayList();
                 boolean continueLoading = true;
-                final Map<String, byte[]> loadedClasses = (Map<String, byte[]>)Maps.newHashMap();
-                Set<String> unloadedClasses = (Set<String>)Sets.newLinkedHashSet((Iterable<?>)loadOrderHint);
+                final Map<String, byte[]> loadedClasses = Maps.newHashMap();
+                Set<String> unloadedClasses = Sets.newLinkedHashSet(loadOrderHint);
                 if (classBytesMap.size() != unloadedClasses.size()) {
                     Agent.LOG.log(Level.FINEST, "loadOrderHint ( size {0} ) differs from classBytesMap ( size {1} )", new Object[] { unloadedClasses.size(), classBytesMap.size() });
-                    unloadedClasses = (Set<String>)Sets.newHashSet((Iterable<?>)classBytesMap.keySet());
+                    unloadedClasses = Sets.newHashSet(classBytesMap.keySet());
                 }
                 while (continueLoading && unloadedClasses.size() > 0) {
                     continueLoading = false;
@@ -82,7 +82,7 @@ abstract class ClassAppender
                         final byte[] classBytes = classBytesMap.get(classname);
                         if (null == classBytes) {
                             Agent.LOG.log(Level.FINEST, "Class in loadOrderHint {0} was not found in classBytesMap", new Object[] { classname });
-                            unloadedClasses = (Set<String>)Sets.newHashSet((Iterable<?>)classBytesMap.keySet());
+                            unloadedClasses = Sets.newHashSet(classBytesMap.keySet());
                             continueLoading = true;
                             break;
                         }

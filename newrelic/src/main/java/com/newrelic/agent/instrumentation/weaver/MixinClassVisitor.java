@@ -41,9 +41,9 @@ class MixinClassVisitor extends ClassVisitor
     
     public MixinClassVisitor(final byte[] bytes, final InstrumentationPackage instrumentationPackage, final WeavedClassInfo weavedClassInfo) {
         super(327680);
-        this.methods = (Map<Method, MergeMethodVisitor>)Maps.newHashMap();
-        this.innerClasses = (List<InnerClassNode>)Lists.newArrayList();
-        this.methodsToInline = (Map<Method, MethodNode>)Maps.newHashMap();
+        this.methods = Maps.newHashMap();
+        this.innerClasses = Lists.newArrayList();
+        this.methodsToInline = Maps.newHashMap();
         this.bytes = bytes;
         this.instrumentationPackage = instrumentationPackage;
         this.weavedClassInfo = weavedClassInfo;
@@ -75,7 +75,7 @@ class MixinClassVisitor extends ClassVisitor
     public void visitEnd() {
         super.visitEnd();
         this.removeInitSuperCalls();
-        final List<Method> emptyMethods = (List<Method>)Lists.newArrayList();
+        final List<Method> emptyMethods = Lists.newArrayList();
         for (final Map.Entry<Method, MergeMethodVisitor> entry : this.methods.entrySet()) {
             if (entry.getValue().instructions.size() == 0) {
                 emptyMethods.add(entry.getKey());

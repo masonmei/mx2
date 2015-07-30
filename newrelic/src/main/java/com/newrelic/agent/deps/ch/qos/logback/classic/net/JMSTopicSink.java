@@ -60,8 +60,8 @@ public class JMSTopicSink implements MessageListener
         this.logger = (Logger)LoggerFactory.getLogger(JMSTopicSink.class);
         try {
             final Properties env = new Properties();
-            ((Hashtable<String, String>)env).put("java.naming.factory.initial", "org.apache.activemq.jndi.ActiveMQInitialContextFactory");
-            ((Hashtable<String, String>)env).put("java.naming.provider.url", "tcp://localhost:61616");
+            env.put("java.naming.factory.initial", "org.apache.activemq.jndi.ActiveMQInitialContextFactory");
+            env.put("java.naming.provider.url", "tcp://localhost:61616");
             final Context ctx = new InitialContext(env);
             final TopicConnectionFactory topicConnectionFactory = (TopicConnectionFactory)this.lookup(ctx, tcfBindingName);
             System.out.println("Topic Cnx Factory found");

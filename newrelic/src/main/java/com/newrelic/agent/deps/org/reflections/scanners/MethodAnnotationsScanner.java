@@ -1,18 +1,15 @@
-// 
-// Decompiled by Procyon v0.5.29
-// 
-
 package com.newrelic.agent.deps.org.reflections.scanners;
 
-import java.util.Iterator;
+import java.util.List;
 
-public class MethodAnnotationsScanner extends AbstractScanner
-{
+@SuppressWarnings({"unchecked"})
+/** scans for method's annotations */
+public class MethodAnnotationsScanner extends AbstractScanner {
     public void scan(final Object cls) {
-        for (final Object method : this.getMetadataAdapter().getMethods(cls)) {
-            for (final String methodAnnotation : this.getMetadataAdapter().getMethodAnnotationNames(method)) {
-                if (this.acceptResult(methodAnnotation)) {
-                    this.getStore().put(methodAnnotation, this.getMetadataAdapter().getMethodFullKey(cls, method));
+        for (Object method : getMetadataAdapter().getMethods(cls)) {
+            for (String methodAnnotation : (List<String>) getMetadataAdapter().getMethodAnnotationNames(method)) {
+                if (acceptResult(methodAnnotation)) {
+                    getStore().put(methodAnnotation, getMetadataAdapter().getMethodFullKey(cls, method));
                 }
             }
         }

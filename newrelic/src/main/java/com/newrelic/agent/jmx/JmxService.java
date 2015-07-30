@@ -267,7 +267,7 @@ public class JmxService extends AbstractService implements HarvestListener
             num = (Number)value;
         }
         else if (value instanceof Boolean) {
-            num = (((boolean)value) ? 1 : 0);
+            num = (((Boolean)value) ? 1 : 0);
         }
         else if (value != null) {
             try {
@@ -303,7 +303,7 @@ public class JmxService extends AbstractService implements HarvestListener
             srvrList = MBeanServerFactory.findMBeanServer(null);
         }
         else {
-            srvrList = (Collection<MBeanServer>)Sets.newHashSet((Iterable<?>)MBeanServerFactory.findMBeanServer(null));
+            srvrList = Sets.newHashSet(MBeanServerFactory.findMBeanServer(null));
             this.getLogger().log(Level.FINEST, "JMX Service : toRemove MBeansServers ({0})", new Object[] { this.toRemoveMBeanServers.size() });
             srvrList.removeAll(this.toRemoveMBeanServers);
             this.getLogger().log(Level.FINEST, "JMX Service : toAdd MBeansServers ({0})", new Object[] { this.alwaysIncludeMBeanServers.size() });

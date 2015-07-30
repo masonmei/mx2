@@ -24,7 +24,7 @@ final class ListenerCallQueue<L> implements Runnable
     private boolean isThreadScheduled;
     
     ListenerCallQueue(final L listener, final Executor executor) {
-        this.waitQueue = (Queue<Callback<L>>)Queues.newArrayDeque();
+        this.waitQueue = Queues.newArrayDeque();
         this.listener = Preconditions.checkNotNull(listener);
         this.executor = Preconditions.checkNotNull(executor);
     }

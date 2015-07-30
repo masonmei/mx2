@@ -1,514 +1,693 @@
-// 
-// Decompiled by Procyon v0.5.29
-// 
-
+/**
+ * Logback: the reliable, generic, fast and flexible logging framework.
+ * Copyright (C) 1999-2011, QOS.ch. All rights reserved.
+ *
+ * This program and the accompanying materials are dual-licensed under
+ * either the terms of the Eclipse Public License v1.0 as published by
+ * the Eclipse Foundation
+ *
+ *   or (per the licensee's choosing)
+ *
+ * under the terms of the GNU Lesser General Public License version 2.1
+ * as published by the Free Software Foundation.
+ */
 package com.newrelic.agent.deps.ch.qos.logback.core.net;
 
-import java.util.Hashtable;
-import java.util.Iterator;
-import javax.mail.Multipart;
-import javax.mail.Transport;
-import java.util.Date;
-import javax.mail.BodyPart;
-import javax.mail.internet.MimeMultipart;
-import com.newrelic.agent.deps.ch.qos.logback.core.util.ContentTypeUtil;
-import javax.mail.Message;
-import javax.mail.internet.MimeBodyPart;
-import java.util.Collection;
+import java.util.ArrayList;
 import java.util.Arrays;
-import javax.mail.internet.AddressException;
-import com.newrelic.agent.deps.ch.qos.logback.core.boolex.EvaluationException;
-import com.newrelic.agent.deps.ch.qos.logback.core.helpers.CyclicBuffer;
-import javax.mail.Authenticator;
+import java.util.Date;
+import java.util.List;
 import java.util.Properties;
-import com.newrelic.agent.deps.ch.qos.logback.core.util.OptionHelper;
+
+import javax.mail.Message;
+import javax.mail.MessagingException;
+import javax.mail.Multipart;
+import javax.mail.Session;
+import javax.mail.Transport;
+import javax.mail.internet.AddressException;
+import javax.mail.internet.InternetAddress;
+import javax.mail.internet.MimeBodyPart;
+import javax.mail.internet.MimeMessage;
+import javax.mail.internet.MimeMultipart;
 import javax.naming.Context;
 import javax.naming.InitialContext;
-import javax.mail.Session;
-import javax.mail.MessagingException;
-import javax.mail.Address;
-import com.newrelic.agent.deps.ch.qos.logback.core.spi.CyclicBufferTrackerImpl;
-import com.newrelic.agent.deps.ch.qos.logback.core.sift.DefaultDiscriminator;
-import java.util.ArrayList;
-import com.newrelic.agent.deps.ch.qos.logback.core.spi.CyclicBufferTracker;
-import com.newrelic.agent.deps.ch.qos.logback.core.sift.Discriminator;
-import com.newrelic.agent.deps.ch.qos.logback.core.boolex.EventEvaluator;
-import javax.mail.internet.MimeMessage;
-import com.newrelic.agent.deps.ch.qos.logback.core.pattern.PatternLayoutBase;
-import java.util.List;
-import com.newrelic.agent.deps.ch.qos.logback.core.Layout;
-import javax.mail.internet.InternetAddress;
-import com.newrelic.agent.deps.ch.qos.logback.core.AppenderBase;
 
-public abstract class SMTPAppenderBase<E> extends AppenderBase<E>
-{
-    static InternetAddress[] EMPTY_IA_ARRAY;
-    static final int MAX_DELAY_BETWEEN_STATUS_MESSAGES = 1228800000;
-    long lastTrackerStatusPrint;
-    int delayBetweenStatusMessages;
+import com.newrelic.agent.deps.ch.qos.logback.core.AppenderBase;
+import com.newrelic.agent.deps.ch.qos.logback.core.CoreConstants;
+import com.newrelic.agent.deps.ch.qos.logback.core.Layout;
+import com.newrelic.agent.deps.ch.qos.logback.core.boolex.EvaluationException;
+import com.newrelic.agent.deps.ch.qos.logback.core.boolex.EventEvaluator;
+import com.newrelic.agent.deps.ch.qos.logback.core.helpers.CyclicBuffer;
+import com.newrelic.agent.deps.ch.qos.logback.core.pattern.PatternLayoutBase;
+import com.newrelic.agent.deps.ch.qos.logback.core.sift.DefaultDiscriminator;
+import com.newrelic.agent.deps.ch.qos.logback.core.sift.Discriminator;
+import com.newrelic.agent.deps.ch.qos.logback.core.spi.CyclicBufferTracker;
+import com.newrelic.agent.deps.ch.qos.logback.core.spi.CyclicBufferTrackerImpl;
+import com.newrelic.agent.deps.ch.qos.logback.core.util.ContentTypeUtil;
+import com.newrelic.agent.deps.ch.qos.logback.core.util.OptionHelper;
+
+// Contributors:
+// Andrey Rybin charset encoding support http://jira.qos.ch/browse/LBCORE-69
+
+/**
+ * An abstract class that provides support for sending events to an email
+ * address.
+ * <p/>
+ * <p/>
+ * See http://logback.qos.ch/manual/appenders.html#SMTPAppender for further
+ * documentation.
+ *
+ * @author Ceki G&uuml;lc&uuml;
+ * @author S&eacute;bastien Pennec
+ */
+public abstract class SMTPAppenderBase<E> extends AppenderBase<E> {
+
+    static InternetAddress[] EMPTY_IA_ARRAY = new InternetAddress[0];
+    // ~ 14 days
+    static final int MAX_DELAY_BETWEEN_STATUS_MESSAGES = 1228800 * CoreConstants.MILLIS_IN_ONE_SECOND;
+
+    long lastTrackerStatusPrint = 0;
+    int delayBetweenStatusMessages = 300 * CoreConstants.MILLIS_IN_ONE_SECOND;
+
     protected Layout<E> subjectLayout;
     protected Layout<E> layout;
-    private List<PatternLayoutBase<E>> toPatternLayoutList;
+
+    private List<PatternLayoutBase<E>> toPatternLayoutList = new ArrayList<PatternLayoutBase<E>>();
     private String from;
-    private String subjectStr;
+    private String subjectStr = null;
     private String smtpHost;
-    private int smtpPort;
-    private boolean starttls;
-    private boolean ssl;
-    private boolean sessionViaJNDI;
-    private String jndiLocation;
+    private int smtpPort = 25;
+    private boolean starttls = false;
+    private boolean ssl = false;
+    private boolean sessionViaJNDI = false;
+    private String jndiLocation = CoreConstants.JNDI_COMP_PREFIX + "/mail/Session";
+
+
     String username;
     String password;
     String localhost;
-    boolean asynchronousSending;
-    private String charsetEncoding;
+
+    boolean asynchronousSending = true;
+
+    private String charsetEncoding = "UTF-8";
+
     protected MimeMessage mimeMsg;
+
     protected EventEvaluator<E> eventEvaluator;
-    protected Discriminator<E> discriminator;
+
+    protected Discriminator<E> discriminator = new DefaultDiscriminator<E>();
     protected CyclicBufferTracker<E> cbTracker;
-    private int errorCount;
-    
-    public SMTPAppenderBase() {
-        this.lastTrackerStatusPrint = 0L;
-        this.delayBetweenStatusMessages = 300000;
-        this.toPatternLayoutList = new ArrayList<PatternLayoutBase<E>>();
-        this.subjectStr = null;
-        this.smtpPort = 25;
-        this.starttls = false;
-        this.ssl = false;
-        this.sessionViaJNDI = false;
-        this.jndiLocation = "java:comp/env/mail/Session";
-        this.asynchronousSending = true;
-        this.charsetEncoding = "UTF-8";
-        this.discriminator = new DefaultDiscriminator<E>();
-        this.errorCount = 0;
-    }
-    
-    protected abstract Layout<E> makeSubjectLayout(final String p0);
-    
+
+    private int errorCount = 0;
+
+    /**
+     * return a layout for the subject string as appropriate for the module. If the
+     * subjectStr parameter is null, then a default value for subjectStr should be
+     * used.
+     *
+     * @param subjectStr
+     * @return a layout as appropriate for the module
+     */
+    abstract protected Layout<E> makeSubjectLayout(String subjectStr);
+
+    /**
+     * Start the appender
+     */
     public void start() {
-        if (this.cbTracker == null) {
-            this.cbTracker = new CyclicBufferTrackerImpl<E>();
+
+        if (cbTracker == null) {
+            cbTracker = new CyclicBufferTrackerImpl<E>();
         }
+
         Session session = null;
-        if (this.sessionViaJNDI) {
-            session = this.lookupSessionInJNDI();
-        }
-        else {
-            session = this.buildSessionFromProperties();
-        }
+        if (sessionViaJNDI)
+            session = lookupSessionInJNDI();
+        else
+            session = buildSessionFromProperties();
+
         if (session == null) {
-            this.addError("Failed to obtain javax.mail.Session. Cannot start.");
+            addError("Failed to obtain javax.mail.Session. Cannot start.");
             return;
         }
-        this.mimeMsg = new MimeMessage(session);
+        mimeMsg = new MimeMessage(session);
+
         try {
-            if (this.from != null) {
-                this.mimeMsg.setFrom((Address)this.getAddress(this.from));
+            if (from != null) {
+                mimeMsg.setFrom(getAddress(from));
+            } else {
+                mimeMsg.setFrom();
             }
-            else {
-                this.mimeMsg.setFrom();
-            }
-            this.subjectLayout = this.makeSubjectLayout(this.subjectStr);
-            this.started = true;
-        }
-        catch (MessagingException e) {
-            this.addError("Could not activate SMTPAppender options.", (Throwable)e);
+
+            subjectLayout = makeSubjectLayout(subjectStr);
+
+            started = true;
+
+        } catch (MessagingException e) {
+            addError("Could not activate SMTPAppender options.", e);
         }
     }
-    
+
     private Session lookupSessionInJNDI() {
-        this.addInfo("Looking up javax.mail.Session at JNDI location [" + this.jndiLocation + "]");
+        addInfo("Looking up javax.mail.Session at JNDI location [" + jndiLocation + "]");
         try {
-            final Context initialContext = new InitialContext();
-            final Object obj = initialContext.lookup(this.jndiLocation);
-            return (Session)obj;
-        }
-        catch (Exception e) {
-            this.addError("Failed to obtain javax.mail.Session from JNDI location [" + this.jndiLocation + "]");
+            Context initialContext = new InitialContext();
+            Object obj = initialContext.lookup(jndiLocation);
+            return (Session) obj;
+        } catch (Exception e) {
+            addError("Failed to obtain javax.mail.Session from JNDI location [" + jndiLocation + "]");
             return null;
         }
     }
-    
+
     private Session buildSessionFromProperties() {
-        final Properties props = new Properties(OptionHelper.getSystemProperties());
-        if (this.smtpHost != null) {
-            ((Hashtable<String, String>)props).put("mail.smtp.host", this.smtpHost);
+        Properties props = new Properties(OptionHelper.getSystemProperties());
+        if (smtpHost != null) {
+            props.put("mail.smtp.host", smtpHost);
         }
-        ((Hashtable<String, String>)props).put("mail.smtp.port", Integer.toString(this.smtpPort));
-        if (this.localhost != null) {
-            ((Hashtable<String, String>)props).put("mail.smtp.localhost", this.localhost);
+        props.put("mail.smtp.port", Integer.toString(smtpPort));
+
+        if (localhost != null) {
+            props.put("mail.smtp.localhost", localhost);
         }
+
         LoginAuthenticator loginAuthenticator = null;
-        if (this.username != null) {
-            loginAuthenticator = new LoginAuthenticator(this.username, this.password);
-            ((Hashtable<String, String>)props).put("mail.smtp.auth", "true");
+
+        if (username != null) {
+            loginAuthenticator = new LoginAuthenticator(username, password);
+            props.put("mail.smtp.auth", "true");
         }
-        if (this.isSTARTTLS() && this.isSSL()) {
-            this.addError("Both SSL and StartTLS cannot be enabled simultaneously");
-        }
-        else {
-            if (this.isSTARTTLS()) {
-                ((Hashtable<String, String>)props).put("mail.smtp.starttls.enable", "true");
+
+        if (isSTARTTLS() && isSSL()) {
+            addError("Both SSL and StartTLS cannot be enabled simultaneously");
+        } else {
+            if (isSTARTTLS()) {
+                // see also http://jira.qos.ch/browse/LBCORE-225
+                props.put("mail.smtp.starttls.enable", "true");
             }
-            if (this.isSSL()) {
-                final String SSL_FACTORY = "javax.net.ssl.SSLSocketFactory";
-                ((Hashtable<String, String>)props).put("mail.smtp.socketFactory.port", Integer.toString(this.smtpPort));
-                ((Hashtable<String, String>)props).put("mail.smtp.socketFactory.class", SSL_FACTORY);
-                ((Hashtable<String, String>)props).put("mail.smtp.socketFactory.fallback", "true");
+            if (isSSL()) {
+                String SSL_FACTORY = "javax.net.ssl.SSLSocketFactory";
+                props.put("mail.smtp.socketFactory.port", Integer.toString(smtpPort));
+                props.put("mail.smtp.socketFactory.class", SSL_FACTORY);
+                props.put("mail.smtp.socketFactory.fallback", "true");
             }
         }
-        return Session.getInstance(props, (Authenticator)loginAuthenticator);
+
+        // props.put("mail.debug", "true");
+
+        return Session.getInstance(props, loginAuthenticator);
     }
-    
-    protected void append(final E eventObject) {
-        if (!this.checkEntryConditions()) {
+
+    /**
+     * Perform SMTPAppender specific appending actions, delegating some of them to
+     * a subclass and checking if the event triggers an e-mail to be sent.
+     */
+    protected void append(E eventObject) {
+
+        if (!checkEntryConditions()) {
             return;
         }
-        final String key = this.discriminator.getDiscriminatingValue(eventObject);
-        final long now = System.currentTimeMillis();
-        final CyclicBuffer<E> cb = this.cbTracker.getOrCreate(key, now);
-        this.subAppend(cb, eventObject);
+
+        String key = discriminator.getDiscriminatingValue(eventObject);
+        long now = System.currentTimeMillis();
+        final CyclicBuffer<E> cb = cbTracker.getOrCreate(key, now);
+        subAppend(cb, eventObject);
+
         try {
-            if (this.eventEvaluator.evaluate(eventObject)) {
-                final CyclicBuffer<E> cbClone = new CyclicBuffer<E>(cb);
+            if (eventEvaluator.evaluate(eventObject)) {
+                // clone the CyclicBuffer before sending out asynchronously
+                CyclicBuffer<E> cbClone = new CyclicBuffer<E>(cb);
+                // see http://jira.qos.ch/browse/LBCLASSIC-221
                 cb.clear();
-                if (this.asynchronousSending) {
-                    final SenderRunnable senderRunnable = new SenderRunnable(cbClone, eventObject);
-                    this.context.getExecutorService().execute(senderRunnable);
-                }
-                else {
-                    this.sendBuffer(cbClone, eventObject);
+
+                if (asynchronousSending) {
+                    // perform actual sending asynchronously
+                    SenderRunnable senderRunnable = new SenderRunnable(cbClone, eventObject);
+                    context.getExecutorService().execute(senderRunnable);
+                } else {
+                    // synchronous sending
+                    sendBuffer(cbClone, eventObject);
                 }
             }
-        }
-        catch (EvaluationException ex) {
-            ++this.errorCount;
-            if (this.errorCount < 4) {
-                this.addError("SMTPAppender's EventEvaluator threw an Exception-", ex);
+        } catch (EvaluationException ex) {
+            errorCount++;
+            if (errorCount < CoreConstants.MAX_ERROR_COUNT) {
+                addError("SMTPAppender's EventEvaluator threw an Exception-", ex);
             }
         }
-        if (this.isEventMarkedForBufferRemoval(eventObject)) {
-            this.cbTracker.removeBuffer(key);
+
+        // immediately remove the buffer if asked by the user
+        if (isEventMarkedForBufferRemoval(eventObject)) {
+            cbTracker.removeBuffer(key);
         }
-        this.cbTracker.clearStaleBuffers(now);
-        if (this.lastTrackerStatusPrint + this.delayBetweenStatusMessages < now) {
-            this.addInfo("SMTPAppender [" + this.name + "] is tracking [" + this.cbTracker.size() + "] buffers");
-            this.lastTrackerStatusPrint = now;
-            if (this.delayBetweenStatusMessages < 1228800000) {
-                this.delayBetweenStatusMessages *= 4;
+
+        cbTracker.clearStaleBuffers(now);
+
+        if (lastTrackerStatusPrint + delayBetweenStatusMessages < now) {
+            addInfo("SMTPAppender [" + name + "] is tracking [" + cbTracker.size() + "] buffers");
+            lastTrackerStatusPrint = now;
+            // quadruple 'delay' assuming less than max delay
+            if (delayBetweenStatusMessages < MAX_DELAY_BETWEEN_STATUS_MESSAGES) {
+                delayBetweenStatusMessages *= 4;
             }
         }
     }
-    
-    protected abstract boolean isEventMarkedForBufferRemoval(final E p0);
-    
-    protected abstract void subAppend(final CyclicBuffer<E> p0, final E p1);
-    
+
+    abstract protected boolean isEventMarkedForBufferRemoval(E eventObject);
+
+    abstract protected void subAppend(CyclicBuffer<E> cb, E eventObject);
+
+    /**
+     * This method determines if there is a sense in attempting to append.
+     * <p/>
+     * <p/>
+     * It checks whether there is a set output target and also if there is a set
+     * layout. If these checks fail, then the boolean value <code>false</code> is
+     * returned.
+     */
     public boolean checkEntryConditions() {
         if (!this.started) {
-            this.addError("Attempting to append to a non-started appender: " + this.getName());
+            addError("Attempting to append to a non-started appender: "
+                    + this.getName());
             return false;
         }
+
         if (this.mimeMsg == null) {
-            this.addError("Message object not configured.");
+            addError("Message object not configured.");
             return false;
         }
+
         if (this.eventEvaluator == null) {
-            this.addError("No EventEvaluator is set for appender [" + this.name + "].");
+            addError("No EventEvaluator is set for appender [" + name + "].");
             return false;
         }
+
         if (this.layout == null) {
-            this.addError("No layout set for appender named [" + this.name + "]. For more information, please visit http://logback.qos.ch/codes.html#smtp_no_layout");
+            addError("No layout set for appender named ["
+                    + name
+                    + "]. For more information, please visit http://logback.qos.ch/codes.html#smtp_no_layout");
             return false;
         }
         return true;
     }
-    
-    public synchronized void stop() {
+
+    synchronized public void stop() {
         this.started = false;
     }
-    
-    InternetAddress getAddress(final String addressStr) {
+
+    InternetAddress getAddress(String addressStr) {
         try {
             return new InternetAddress(addressStr);
-        }
-        catch (AddressException e) {
-            this.addError("Could not parse address [" + addressStr + "].", (Throwable)e);
+        } catch (AddressException e) {
+            addError("Could not parse address [" + addressStr + "].", e);
             return null;
         }
     }
-    
-    private List<InternetAddress> parseAddress(final E event) {
-        final int len = this.toPatternLayoutList.size();
-        final List<InternetAddress> iaList = new ArrayList<InternetAddress>();
-        for (int i = 0; i < len; ++i) {
+
+    private List<InternetAddress> parseAddress(E event) {
+        int len = toPatternLayoutList.size();
+
+        List<InternetAddress> iaList = new ArrayList<InternetAddress>();
+
+        for (int i = 0; i < len; i++) {
             try {
-                final PatternLayoutBase<E> emailPL = this.toPatternLayoutList.get(i);
-                final String email = emailPL.doLayout(event);
-                if (email != null && email.length() != 0) {
-                    final InternetAddress[] tmp = InternetAddress.parse(email, true);
-                    iaList.addAll(Arrays.asList(tmp));
+                PatternLayoutBase<E> emailPL = toPatternLayoutList.get(i);
+                String email = emailPL.doLayout(event);
+                if (email == null || email.length() == 0) {
+                    continue;
                 }
-            }
-            catch (AddressException e) {
-                this.addError("Could not parse email address for [" + this.toPatternLayoutList.get(i) + "] for event [" + event + "]", (Throwable)e);
+                InternetAddress[] tmp = InternetAddress.parse(email, true);
+                iaList.addAll(Arrays.asList(tmp));
+            } catch (AddressException e) {
+                addError("Could not parse email address for [" + toPatternLayoutList.get(i) + "] for event [" + event + "]", e);
                 return iaList;
             }
         }
+
         return iaList;
     }
-    
+
+    /**
+     * Returns value of the <b>toList</b> option.
+     */
     public List<PatternLayoutBase<E>> getToList() {
-        return this.toPatternLayoutList;
+        return toPatternLayoutList;
     }
-    
-    protected void sendBuffer(final CyclicBuffer<E> cb, final E lastEventObject) {
+
+    /**
+     * Send the contents of the cyclic buffer as an e-mail message.
+     */
+    protected void sendBuffer(CyclicBuffer<E> cb, E lastEventObject) {
+
+        // Note: this code already owns the monitor for this
+        // appender. This frees us from needing to synchronize on 'cb'.
         try {
-            final MimeBodyPart part = new MimeBodyPart();
-            final StringBuffer sbuf = new StringBuffer();
-            final String header = this.layout.getFileHeader();
+            MimeBodyPart part = new MimeBodyPart();
+
+            StringBuffer sbuf = new StringBuffer();
+
+            String header = layout.getFileHeader();
             if (header != null) {
                 sbuf.append(header);
             }
-            final String presentationHeader = this.layout.getPresentationHeader();
+            String presentationHeader = layout.getPresentationHeader();
             if (presentationHeader != null) {
                 sbuf.append(presentationHeader);
             }
-            this.fillBuffer(cb, sbuf);
-            final String presentationFooter = this.layout.getPresentationFooter();
+            fillBuffer(cb, sbuf);
+            String presentationFooter = layout.getPresentationFooter();
             if (presentationFooter != null) {
                 sbuf.append(presentationFooter);
             }
-            final String footer = this.layout.getFileFooter();
+            String footer = layout.getFileFooter();
             if (footer != null) {
                 sbuf.append(footer);
             }
+
             String subjectStr = "Undefined subject";
-            if (this.subjectLayout != null) {
-                subjectStr = this.subjectLayout.doLayout(lastEventObject);
+            if (subjectLayout != null) {
+                subjectStr = subjectLayout.doLayout(lastEventObject);
             }
-            this.mimeMsg.setSubject(subjectStr, this.charsetEncoding);
-            final List<InternetAddress> destinationAddresses = this.parseAddress(lastEventObject);
+            mimeMsg.setSubject(subjectStr, charsetEncoding);
+
+            List<InternetAddress> destinationAddresses = parseAddress(lastEventObject);
             if (destinationAddresses.isEmpty()) {
-                this.addInfo("Empty destination address. Aborting email transmission");
+                addInfo("Empty destination address. Aborting email transmission");
                 return;
             }
-            final InternetAddress[] toAddressArray = destinationAddresses.toArray(SMTPAppenderBase.EMPTY_IA_ARRAY);
-            this.mimeMsg.setRecipients(Message.RecipientType.TO, (Address[])toAddressArray);
-            final String contentType = this.layout.getContentType();
+
+            InternetAddress[] toAddressArray = destinationAddresses.toArray(EMPTY_IA_ARRAY);
+            mimeMsg.setRecipients(Message.RecipientType.TO, toAddressArray);
+
+            String contentType = layout.getContentType();
+
             if (ContentTypeUtil.isTextual(contentType)) {
-                part.setText(sbuf.toString(), this.charsetEncoding, ContentTypeUtil.getSubType(contentType));
+                part.setText(sbuf.toString(), charsetEncoding, ContentTypeUtil
+                        .getSubType(contentType));
+            } else {
+                part.setContent(sbuf.toString(), layout.getContentType());
             }
-            else {
-                part.setContent((Object)sbuf.toString(), this.layout.getContentType());
-            }
-            final Multipart mp = (Multipart)new MimeMultipart();
-            mp.addBodyPart((BodyPart)part);
-            this.mimeMsg.setContent(mp);
-            this.mimeMsg.setSentDate(new Date());
-            Transport.send((Message)this.mimeMsg);
-            this.addInfo("Sent out SMTP message \"" + subjectStr + "\" to " + Arrays.toString(toAddressArray));
-        }
-        catch (Exception e) {
-            this.addError("Error occurred while sending e-mail notification.", e);
+
+            Multipart mp = new MimeMultipart();
+            mp.addBodyPart(part);
+            mimeMsg.setContent(mp);
+
+            mimeMsg.setSentDate(new Date());
+            Transport.send(mimeMsg);
+            addInfo("Sent out SMTP message \"" + subjectStr + "\" to " + Arrays.toString(toAddressArray));
+        } catch (Exception e) {
+            addError("Error occurred while sending e-mail notification.", e);
         }
     }
-    
-    protected abstract void fillBuffer(final CyclicBuffer<E> p0, final StringBuffer p1);
-    
+
+    abstract protected void fillBuffer(CyclicBuffer<E> cb, StringBuffer sbuf);
+
+    /**
+     * Returns value of the <b>From</b> option.
+     */
     public String getFrom() {
-        return this.from;
+        return from;
     }
-    
+
+    /**
+     * Returns value of the <b>Subject</b> option.
+     */
     public String getSubject() {
-        return this.subjectStr;
+        return subjectStr;
     }
-    
-    public void setFrom(final String from) {
+
+    /**
+     * The <b>From</b> option takes a string value which should be a e-mail
+     * address of the sender.
+     */
+    public void setFrom(String from) {
         this.from = from;
     }
-    
-    public void setSubject(final String subject) {
+
+    /**
+     * The <b>Subject</b> option takes a string value which should be a the
+     * subject of the e-mail message.
+     */
+    public void setSubject(String subject) {
         this.subjectStr = subject;
     }
-    
-    public void setSMTPHost(final String smtpHost) {
-        this.setSmtpHost(smtpHost);
+
+    /**
+     * Alias for smtpHost
+     *
+     * @param smtpHost
+     */
+    public void setSMTPHost(String smtpHost) {
+        setSmtpHost(smtpHost);
     }
-    
-    public void setSmtpHost(final String smtpHost) {
+
+    /**
+     * The <b>smtpHost</b> option takes a string value which should be a the host
+     * name of the SMTP server that will send the e-mail message.
+     */
+    public void setSmtpHost(String smtpHost) {
         this.smtpHost = smtpHost;
     }
-    
+
+    /**
+     * Alias for getSmtpHost().
+     */
     public String getSMTPHost() {
-        return this.getSmtpHost();
+        return getSmtpHost();
     }
-    
+
+    /**
+     * Returns value of the <b>SMTPHost</b> option.
+     */
     public String getSmtpHost() {
-        return this.smtpHost;
+        return smtpHost;
     }
-    
-    public void setSMTPPort(final int port) {
-        this.setSmtpPort(port);
+
+    /**
+     * Alias for {@link #setSmtpPort}.
+     *
+     * @param port
+     */
+    public void setSMTPPort(int port) {
+        setSmtpPort(port);
     }
-    
-    public void setSmtpPort(final int port) {
+
+    /**
+     * The port where the SMTP server is running. Default value is 25.
+     *
+     * @param port
+     */
+    public void setSmtpPort(int port) {
         this.smtpPort = port;
     }
-    
+
+    /**
+     * Alias for {@link #getSmtpPort}
+     *
+     * @return
+     */
     public int getSMTPPort() {
-        return this.getSmtpPort();
+        return getSmtpPort();
     }
-    
+
+    /**
+     * See {@link #setSmtpPort}
+     *
+     * @return
+     */
     public int getSmtpPort() {
-        return this.smtpPort;
+        return smtpPort;
     }
-    
+
     public String getLocalhost() {
-        return this.localhost;
+        return localhost;
     }
-    
-    public void setLocalhost(final String localhost) {
+
+    /**
+     * Set the "mail.smtp.localhost" property to the value passed as parameter to
+     * this method.
+     * <p/>
+     * <p>Useful in case the hostname for the client host is not fully qualified
+     * and as a consequence the SMTP server rejects the clients HELO/EHLO command.
+     * </p>
+     *
+     * @param localhost
+     */
+    public void setLocalhost(String localhost) {
         this.localhost = localhost;
     }
-    
+
     public CyclicBufferTracker<E> getCyclicBufferTracker() {
-        return this.cbTracker;
+        return cbTracker;
     }
-    
-    public void setCyclicBufferTracker(final CyclicBufferTracker<E> cbTracker) {
+
+    public void setCyclicBufferTracker(CyclicBufferTracker<E> cbTracker) {
         this.cbTracker = cbTracker;
     }
-    
+
     public Discriminator<E> getDiscriminator() {
-        return this.discriminator;
+        return discriminator;
     }
-    
-    public void setDiscriminator(final Discriminator<E> discriminator) {
+
+    public void setDiscriminator(Discriminator<E> discriminator) {
         this.discriminator = discriminator;
     }
-    
+
     public boolean isAsynchronousSending() {
-        return this.asynchronousSending;
+        return asynchronousSending;
     }
-    
-    public void setAsynchronousSending(final boolean asynchronousSending) {
+
+    /**
+     * By default, SMTAppender transmits emails asynchronously. For synchronous email transmission set
+     * asynchronousSending to 'false'.
+     *
+     * @param asynchronousSending determines whether sending is done asynchronously or not
+     * @since 1.0.4
+     */
+    public void setAsynchronousSending(boolean asynchronousSending) {
         this.asynchronousSending = asynchronousSending;
     }
-    
-    public void addTo(final String to) {
+
+    public void addTo(String to) {
         if (to == null || to.length() == 0) {
             throw new IllegalArgumentException("Null or empty <to> property");
         }
-        final PatternLayoutBase plb = this.makeNewToPatternLayout(to.trim());
-        plb.setContext(this.context);
+        PatternLayoutBase plb = makeNewToPatternLayout(to.trim());
+        plb.setContext(context);
         plb.start();
         this.toPatternLayoutList.add(plb);
     }
-    
-    protected abstract PatternLayoutBase<E> makeNewToPatternLayout(final String p0);
-    
+
+    abstract protected PatternLayoutBase<E> makeNewToPatternLayout(String toPattern);
+
     public List<String> getToAsListOfString() {
-        final List<String> toList = new ArrayList<String>();
-        for (final PatternLayoutBase plb : this.toPatternLayoutList) {
+        List<String> toList = new ArrayList<String>();
+        for (PatternLayoutBase plb : toPatternLayoutList) {
             toList.add(plb.getPattern());
         }
         return toList;
     }
-    
+
+    // for testing purpose only
     public Message getMessage() {
-        return (Message)this.mimeMsg;
+        return mimeMsg;
     }
-    
-    public void setMessage(final MimeMessage msg) {
+
+    // for testing purpose only
+
+    public void setMessage(MimeMessage msg) {
         this.mimeMsg = msg;
     }
-    
+
     public boolean isSTARTTLS() {
-        return this.starttls;
+        return starttls;
     }
-    
-    public void setSTARTTLS(final boolean startTLS) {
+
+    public void setSTARTTLS(boolean startTLS) {
         this.starttls = startTLS;
     }
-    
+
     public boolean isSSL() {
-        return this.ssl;
+        return ssl;
     }
-    
-    public void setSSL(final boolean ssl) {
+
+    public void setSSL(boolean ssl) {
         this.ssl = ssl;
     }
-    
-    public void setEvaluator(final EventEvaluator<E> eventEvaluator) {
+
+    /**
+     * The <b>EventEvaluator</b> option takes a string value representing the name
+     * of the class implementing the {@link EventEvaluator} interface. A
+     * corresponding object will be instantiated and assigned as the event
+     * evaluator for the SMTPAppender.
+     */
+    public void setEvaluator(EventEvaluator<E> eventEvaluator) {
         this.eventEvaluator = eventEvaluator;
     }
-    
+
     public String getUsername() {
-        return this.username;
+        return username;
     }
-    
-    public void setUsername(final String username) {
+
+    public void setUsername(String username) {
         this.username = username;
     }
-    
+
     public String getPassword() {
-        return this.password;
+        return password;
     }
-    
-    public void setPassword(final String password) {
+
+    public void setPassword(String password) {
         this.password = password;
     }
-    
+
+    /**
+     * @return the charset encoding value
+     * @see #setCharsetEncoding(String)
+     */
     public String getCharsetEncoding() {
-        return this.charsetEncoding;
+        return charsetEncoding;
     }
-    
+
+
     public String getJndiLocation() {
-        return this.jndiLocation;
+        return jndiLocation;
     }
-    
-    public void setJndiLocation(final String jndiLocation) {
+
+    /**
+     * Set the location where a {@link javax.mail.Session} resource is located in JNDI. Default value is
+     * "java:comp/env/mail/Session".
+     *
+     * @param jndiLocation
+     * @since 1.0.6
+     */
+    public void setJndiLocation(String jndiLocation) {
         this.jndiLocation = jndiLocation;
     }
-    
+
     public boolean isSessionViaJNDI() {
-        return this.sessionViaJNDI;
+        return sessionViaJNDI;
     }
-    
-    public void setSessionViaJNDI(final boolean sessionViaJNDI) {
+
+    /**
+     * If set to true, a {@link javax.mail.Session} resource will be retrieved from JNDI. Default is false.
+     *
+     * @param sessionViaJNDI whether to obtain a javax.mail.Session by JNDI
+     * @since 1.0.6
+     */
+    public void setSessionViaJNDI(boolean sessionViaJNDI) {
         this.sessionViaJNDI = sessionViaJNDI;
     }
-    
-    public void setCharsetEncoding(final String charsetEncoding) {
+
+    /**
+     * Set the character set encoding of the outgoing email messages. The default
+     * encoding is "UTF-8" which usually works well for most purposes.
+     *
+     * @param charsetEncoding
+     */
+    public void setCharsetEncoding(String charsetEncoding) {
         this.charsetEncoding = charsetEncoding;
     }
-    
+
     public Layout<E> getLayout() {
-        return this.layout;
+        return layout;
     }
-    
-    public void setLayout(final Layout<E> layout) {
+
+    public void setLayout(Layout<E> layout) {
         this.layout = layout;
     }
-    
-    static {
-        SMTPAppenderBase.EMPTY_IA_ARRAY = new InternetAddress[0];
-    }
-    
-    class SenderRunnable implements Runnable
-    {
+
+    class SenderRunnable implements Runnable {
+
         final CyclicBuffer<E> cyclicBuffer;
         final E e;
-        
-        SenderRunnable(final CyclicBuffer<E> cyclicBuffer, final E e) {
+
+        SenderRunnable(CyclicBuffer<E> cyclicBuffer, E e) {
             this.cyclicBuffer = cyclicBuffer;
             this.e = e;
         }
-        
+
         public void run() {
-            SMTPAppenderBase.this.sendBuffer(this.cyclicBuffer, this.e);
+            sendBuffer(cyclicBuffer, e);
         }
     }
 }

@@ -4,7 +4,6 @@
 
 package com.newrelic.agent.deps.ch.qos.logback.core.boolex;
 
-import java.util.regex.Matcher;
 import java.util.regex.PatternSyntaxException;
 import java.util.regex.Pattern;
 import com.newrelic.agent.deps.ch.qos.logback.core.spi.LifeCycle;

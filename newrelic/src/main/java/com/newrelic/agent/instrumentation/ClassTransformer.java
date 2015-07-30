@@ -268,7 +268,7 @@ public class ClassTransformer implements ContextClassTransformer
             if (InstrumentationUtils.isInterface(cr)) {
                 return null;
             }
-            final Collection<PointCut> strongMatches = (Collection<PointCut>)Lists.newArrayList((Iterable<?>)ClassTransformer.this.pointcuts);
+            final Collection<PointCut> strongMatches = Lists.newArrayList(ClassTransformer.this.pointcuts);
             strongMatches.retainAll(match.getClassMatches().keySet());
             if (strongMatches.isEmpty()) {
                 return null;

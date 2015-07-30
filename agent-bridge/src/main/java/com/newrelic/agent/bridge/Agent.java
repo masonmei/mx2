@@ -4,7 +4,6 @@
 
 package com.newrelic.agent.bridge;
 
-import com.newrelic.api.agent.Agent;
 
 public interface Agent extends com.newrelic.api.agent.Agent
 {

@@ -35,15 +35,15 @@ public class WebServiceVisitor implements ClassMatchVisitorFactory
         if (reader.getInterfaces().length == 0) {
             return null;
         }
-        return new ClassVisitor(cv) {
+        return new ClassVisitor(Agent.ASM_LEVEL, cv) {
             Map<Method, AnnotationDetails> methodsToInstrument;
             Map<String, String> classWebServiceAnnotationDetails;
             String webServiceAnnotationNameValue;
             
             public AnnotationVisitor visitAnnotation(final String desc, final boolean visible) {
                 if (WebServiceVisitor.WEB_SERVICE_ANNOTATION_DESCRIPTOR.equals(desc)) {
-                    this.methodsToInstrument = (Map<Method, AnnotationDetails>)Maps.newHashMap();
-                    this.classWebServiceAnnotationDetails = (Map<String, String>)Maps.newHashMap();
+                    this.methodsToInstrument = Maps.newHashMap();
+                    this.classWebServiceAnnotationDetails = Maps.newHashMap();
                     for (final String interfaceName : reader.getInterfaces()) {
                         try {
                             final ClassStructure classStructure = ClassStructure.getClassStructure(Utils.getClassResource(loader, interfaceName), 15);
@@ -91,13 +91,13 @@ public class WebServiceVisitor implements ClassMatchVisitorFactory
             
             class WebServiceAnnotationVisitor extends AnnotationVisitor
             {
-                public WebServiceAnnotationVisitor() {
-                    super(327680, av);
+                public WebServiceAnnotationVisitor(AnnotationVisitor av) {
+                    super(Agent.ASM_LEVEL, av);
                 }
                 
                 public void visit(final String name, final Object value) {
                     if (value instanceof String) {
-                        ClassVisitor.this.classWebServiceAnnotationDetails.put(name, (String)value);
+                        classWebServiceAnnotationDetails.put(name, (String)value);
                     }
                     super.visit(name, value);
                 }

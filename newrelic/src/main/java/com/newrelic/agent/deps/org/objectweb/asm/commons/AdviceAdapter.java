@@ -1,524 +1,646 @@
-// 
-// Decompiled by Procyon v0.5.29
-// 
-
+/***
+ * ASM: a very small and fast Java bytecode manipulation framework
+ * Copyright (c) 2000-2011 INRIA, France Telecom
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. Neither the name of the copyright holders nor the names of its
+ *    contributors may be used to endorse or promote products derived from
+ *    this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE.
+ */
 package com.newrelic.agent.deps.org.objectweb.asm.commons;
 
-import java.util.Collection;
-import com.newrelic.agent.deps.org.objectweb.asm.Handle;
-import com.newrelic.agent.deps.org.objectweb.asm.Type;
-import com.newrelic.agent.deps.org.objectweb.asm.Label;
-import java.util.HashMap;
 import java.util.ArrayList;
-import com.newrelic.agent.deps.org.objectweb.asm.MethodVisitor;
-import java.util.Map;
+import java.util.HashMap;
 import java.util.List;
-import com.newrelic.agent.deps.org.objectweb.asm.Opcodes;
+import java.util.Map;
 
-public abstract class AdviceAdapter extends GeneratorAdapter implements Opcodes
-{
-    private static final Object THIS;
-    private static final Object OTHER;
+import com.newrelic.agent.deps.org.objectweb.asm.Handle;
+import com.newrelic.agent.deps.org.objectweb.asm.Label;
+import com.newrelic.agent.deps.org.objectweb.asm.MethodVisitor;
+import com.newrelic.agent.deps.org.objectweb.asm.Opcodes;
+import com.newrelic.agent.deps.org.objectweb.asm.Type;
+
+/**
+ * A {@link com.newrelic.agent.deps.org.objectweb.asm.MethodVisitor} to insert before, after and around
+ * advices in methods and constructors.
+ * <p>
+ * The behavior for constructors is like this:
+ * <ol>
+ *
+ * <li>as long as the INVOKESPECIAL for the object initialization has not been
+ * reached, every bytecode instruction is dispatched in the ctor code visitor</li>
+ *
+ * <li>when this one is reached, it is only added in the ctor code visitor and a
+ * JP invoke is added</li>
+ *
+ * <li>after that, only the other code visitor receives the instructions</li>
+ *
+ * </ol>
+ *
+ * @author Eugene Kuleshov
+ * @author Eric Bruneton
+ */
+public abstract class AdviceAdapter extends GeneratorAdapter implements Opcodes {
+
+    private static final Object THIS = new Object();
+
+    private static final Object OTHER = new Object();
+
     protected int methodAccess;
+
     protected String methodDesc;
+
     private boolean constructor;
+
     private boolean superInitialized;
-    private List stackFrame;
-    private Map branches;
-    
-    protected AdviceAdapter(final int n, final MethodVisitor methodVisitor, final int methodAccess, final String s, final String methodDesc) {
-        super(n, methodVisitor, methodAccess, s, methodDesc);
-        this.methodAccess = methodAccess;
-        this.methodDesc = methodDesc;
-        this.constructor = "<init>".equals(s);
+
+    private List<Object> stackFrame;
+
+    private Map<Label, List<Object>> branches;
+
+    /**
+     * Creates a new {@link AdviceAdapter}.
+     *
+     * @param api
+     *            the ASM API version implemented by this visitor. Must be one
+     *            of {@link Opcodes#ASM4} or {@link Opcodes#ASM5}.
+     * @param mv
+     *            the method visitor to which this adapter delegates calls.
+     * @param access
+     *            the method's access flags (see {@link Opcodes}).
+     * @param name
+     *            the method's name.
+     * @param desc
+     *            the method's descriptor (see {@link Type Type}).
+     */
+    protected AdviceAdapter(final int api, final MethodVisitor mv,
+                            final int access, final String name, final String desc) {
+        super(api, mv, access, name, desc);
+        methodAccess = access;
+        methodDesc = desc;
+        constructor = "<init>".equals(name);
     }
-    
+
+    @Override
     public void visitCode() {
-        this.mv.visitCode();
-        if (this.constructor) {
-            this.stackFrame = new ArrayList();
-            this.branches = new HashMap();
-        }
-        else {
-            this.superInitialized = true;
-            this.onMethodEnter();
+        mv.visitCode();
+        if (constructor) {
+            stackFrame = new ArrayList<Object>();
+            branches = new HashMap<Label, List<Object>>();
+        } else {
+            superInitialized = true;
+            onMethodEnter();
         }
     }
-    
+
+    @Override
     public void visitLabel(final Label label) {
-        this.mv.visitLabel(label);
-        if (this.constructor && this.branches != null) {
-            final List stackFrame = this.branches.get(label);
-            if (stackFrame != null) {
-                this.stackFrame = stackFrame;
-                this.branches.remove(label);
+        mv.visitLabel(label);
+        if (constructor && branches != null) {
+            List<Object> frame = branches.get(label);
+            if (frame != null) {
+                stackFrame = frame;
+                branches.remove(label);
             }
         }
     }
-    
-    public void visitInsn(final int n) {
-        if (this.constructor) {
-            switch (n) {
-                case 177: {
-                    this.onMethodExit(n);
+
+    @Override
+    public void visitInsn(final int opcode) {
+        if (constructor) {
+            int s;
+            switch (opcode) {
+                case RETURN: // empty stack
+                    onMethodExit(opcode);
                     break;
-                }
-                case 172:
-                case 174:
-                case 176:
-                case 191: {
-                    this.popValue();
-                    this.onMethodExit(n);
+                case IRETURN: // 1 before n/a after
+                case FRETURN: // 1 before n/a after
+                case ARETURN: // 1 before n/a after
+                case ATHROW: // 1 before n/a after
+                    popValue();
+                    onMethodExit(opcode);
                     break;
-                }
-                case 173:
-                case 175: {
-                    this.popValue();
-                    this.popValue();
-                    this.onMethodExit(n);
-                }
-                case 1:
-                case 2:
-                case 3:
-                case 4:
-                case 5:
-                case 6:
-                case 7:
-                case 8:
-                case 11:
-                case 12:
-                case 13:
-                case 133:
-                case 135:
-                case 140:
-                case 141: {
-                    this.pushValue(AdviceAdapter.OTHER);
+                case LRETURN: // 2 before n/a after
+                case DRETURN: // 2 before n/a after
+                    popValue();
+                    popValue();
+                    onMethodExit(opcode);
                     break;
-                }
-                case 9:
-                case 10:
-                case 14:
-                case 15: {
-                    this.pushValue(AdviceAdapter.OTHER);
-                    this.pushValue(AdviceAdapter.OTHER);
+                case NOP:
+                case LALOAD: // remove 2 add 2
+                case DALOAD: // remove 2 add 2
+                case LNEG:
+                case DNEG:
+                case FNEG:
+                case INEG:
+                case L2D:
+                case D2L:
+                case F2I:
+                case I2B:
+                case I2C:
+                case I2S:
+                case I2F:
+                case ARRAYLENGTH:
                     break;
-                }
-                case 46:
-                case 48:
-                case 50:
-                case 51:
-                case 52:
-                case 53:
-                case 87:
-                case 96:
-                case 98:
-                case 100:
-                case 102:
-                case 104:
-                case 106:
-                case 108:
-                case 110:
-                case 112:
-                case 114:
-                case 120:
-                case 121:
-                case 122:
-                case 123:
-                case 124:
-                case 125:
-                case 126:
-                case 128:
-                case 130:
-                case 136:
-                case 137:
-                case 142:
-                case 144:
-                case 149:
-                case 150:
-                case 194:
-                case 195: {
-                    this.popValue();
+                case ACONST_NULL:
+                case ICONST_M1:
+                case ICONST_0:
+                case ICONST_1:
+                case ICONST_2:
+                case ICONST_3:
+                case ICONST_4:
+                case ICONST_5:
+                case FCONST_0:
+                case FCONST_1:
+                case FCONST_2:
+                case F2L: // 1 before 2 after
+                case F2D:
+                case I2L:
+                case I2D:
+                    pushValue(OTHER);
                     break;
-                }
-                case 88:
-                case 97:
-                case 99:
-                case 101:
-                case 103:
-                case 105:
-                case 107:
-                case 109:
-                case 111:
-                case 113:
-                case 115:
-                case 127:
-                case 129:
-                case 131: {
-                    this.popValue();
-                    this.popValue();
+                case LCONST_0:
+                case LCONST_1:
+                case DCONST_0:
+                case DCONST_1:
+                    pushValue(OTHER);
+                    pushValue(OTHER);
                     break;
-                }
-                case 79:
-                case 81:
-                case 83:
-                case 84:
-                case 85:
-                case 86:
-                case 148:
-                case 151:
-                case 152: {
-                    this.popValue();
-                    this.popValue();
-                    this.popValue();
+                case IALOAD: // remove 2 add 1
+                case FALOAD: // remove 2 add 1
+                case AALOAD: // remove 2 add 1
+                case BALOAD: // remove 2 add 1
+                case CALOAD: // remove 2 add 1
+                case SALOAD: // remove 2 add 1
+                case POP:
+                case IADD:
+                case FADD:
+                case ISUB:
+                case LSHL: // 3 before 2 after
+                case LSHR: // 3 before 2 after
+                case LUSHR: // 3 before 2 after
+                case L2I: // 2 before 1 after
+                case L2F: // 2 before 1 after
+                case D2I: // 2 before 1 after
+                case D2F: // 2 before 1 after
+                case FSUB:
+                case FMUL:
+                case FDIV:
+                case FREM:
+                case FCMPL: // 2 before 1 after
+                case FCMPG: // 2 before 1 after
+                case IMUL:
+                case IDIV:
+                case IREM:
+                case ISHL:
+                case ISHR:
+                case IUSHR:
+                case IAND:
+                case IOR:
+                case IXOR:
+                case MONITORENTER:
+                case MONITOREXIT:
+                    popValue();
                     break;
-                }
-                case 80:
-                case 82: {
-                    this.popValue();
-                    this.popValue();
-                    this.popValue();
-                    this.popValue();
+                case POP2:
+                case LSUB:
+                case LMUL:
+                case LDIV:
+                case LREM:
+                case LADD:
+                case LAND:
+                case LOR:
+                case LXOR:
+                case DADD:
+                case DMUL:
+                case DSUB:
+                case DDIV:
+                case DREM:
+                    popValue();
+                    popValue();
                     break;
-                }
-                case 89: {
-                    this.pushValue(this.peekValue());
+                case IASTORE:
+                case FASTORE:
+                case AASTORE:
+                case BASTORE:
+                case CASTORE:
+                case SASTORE:
+                case LCMP: // 4 before 1 after
+                case DCMPL:
+                case DCMPG:
+                    popValue();
+                    popValue();
+                    popValue();
                     break;
-                }
-                case 90: {
-                    final int size = this.stackFrame.size();
-                    this.stackFrame.add(size - 2, this.stackFrame.get(size - 1));
+                case LASTORE:
+                case DASTORE:
+                    popValue();
+                    popValue();
+                    popValue();
+                    popValue();
                     break;
-                }
-                case 91: {
-                    final int size2 = this.stackFrame.size();
-                    this.stackFrame.add(size2 - 3, this.stackFrame.get(size2 - 1));
+                case DUP:
+                    pushValue(peekValue());
                     break;
-                }
-                case 92: {
-                    final int size3 = this.stackFrame.size();
-                    this.stackFrame.add(size3 - 2, this.stackFrame.get(size3 - 1));
-                    this.stackFrame.add(size3 - 2, this.stackFrame.get(size3 - 1));
+                case DUP_X1:
+                    s = stackFrame.size();
+                    stackFrame.add(s - 2, stackFrame.get(s - 1));
                     break;
-                }
-                case 93: {
-                    final int size4 = this.stackFrame.size();
-                    this.stackFrame.add(size4 - 3, this.stackFrame.get(size4 - 1));
-                    this.stackFrame.add(size4 - 3, this.stackFrame.get(size4 - 1));
+                case DUP_X2:
+                    s = stackFrame.size();
+                    stackFrame.add(s - 3, stackFrame.get(s - 1));
                     break;
-                }
-                case 94: {
-                    final int size5 = this.stackFrame.size();
-                    this.stackFrame.add(size5 - 4, this.stackFrame.get(size5 - 1));
-                    this.stackFrame.add(size5 - 4, this.stackFrame.get(size5 - 1));
+                case DUP2:
+                    s = stackFrame.size();
+                    stackFrame.add(s - 2, stackFrame.get(s - 1));
+                    stackFrame.add(s - 2, stackFrame.get(s - 1));
                     break;
-                }
-                case 95: {
-                    final int size6 = this.stackFrame.size();
-                    this.stackFrame.add(size6 - 2, this.stackFrame.get(size6 - 1));
-                    this.stackFrame.remove(size6);
+                case DUP2_X1:
+                    s = stackFrame.size();
+                    stackFrame.add(s - 3, stackFrame.get(s - 1));
+                    stackFrame.add(s - 3, stackFrame.get(s - 1));
                     break;
-                }
+                case DUP2_X2:
+                    s = stackFrame.size();
+                    stackFrame.add(s - 4, stackFrame.get(s - 1));
+                    stackFrame.add(s - 4, stackFrame.get(s - 1));
+                    break;
+                case SWAP:
+                    s = stackFrame.size();
+                    stackFrame.add(s - 2, stackFrame.get(s - 1));
+                    stackFrame.remove(s);
+                    break;
+            }
+        } else {
+            switch (opcode) {
+                case RETURN:
+                case IRETURN:
+                case FRETURN:
+                case ARETURN:
+                case LRETURN:
+                case DRETURN:
+                case ATHROW:
+                    onMethodExit(opcode);
+                    break;
             }
         }
-        else {
-            switch (n) {
-                case 172:
-                case 173:
-                case 174:
-                case 175:
-                case 176:
-                case 177:
-                case 191: {
-                    this.onMethodExit(n);
-                    break;
-                }
-            }
-        }
-        this.mv.visitInsn(n);
+        mv.visitInsn(opcode);
     }
-    
-    public void visitVarInsn(final int n, final int n2) {
-        super.visitVarInsn(n, n2);
-        if (this.constructor) {
-            switch (n) {
-                case 21:
-                case 23: {
-                    this.pushValue(AdviceAdapter.OTHER);
+
+    @Override
+    public void visitVarInsn(final int opcode, final int var) {
+        super.visitVarInsn(opcode, var);
+        if (constructor) {
+            switch (opcode) {
+                case ILOAD:
+                case FLOAD:
+                    pushValue(OTHER);
                     break;
-                }
-                case 22:
-                case 24: {
-                    this.pushValue(AdviceAdapter.OTHER);
-                    this.pushValue(AdviceAdapter.OTHER);
+                case LLOAD:
+                case DLOAD:
+                    pushValue(OTHER);
+                    pushValue(OTHER);
                     break;
-                }
-                case 25: {
-                    this.pushValue((n2 == 0) ? AdviceAdapter.THIS : AdviceAdapter.OTHER);
+                case ALOAD:
+                    pushValue(var == 0 ? THIS : OTHER);
                     break;
-                }
-                case 54:
-                case 56:
-                case 58: {
-                    this.popValue();
+                case ASTORE:
+                case ISTORE:
+                case FSTORE:
+                    popValue();
                     break;
-                }
-                case 55:
-                case 57: {
-                    this.popValue();
-                    this.popValue();
+                case LSTORE:
+                case DSTORE:
+                    popValue();
+                    popValue();
                     break;
-                }
             }
         }
     }
-    
-    public void visitFieldInsn(final int n, final String s, final String s2, final String s3) {
-        this.mv.visitFieldInsn(n, s, s2, s3);
-        if (this.constructor) {
-            final char char1 = s3.charAt(0);
-            final boolean b = char1 == 'J' || char1 == 'D';
-            switch (n) {
-                case 178: {
-                    this.pushValue(AdviceAdapter.OTHER);
-                    if (b) {
-                        this.pushValue(AdviceAdapter.OTHER);
-                        break;
+
+    @Override
+    public void visitFieldInsn(final int opcode, final String owner,
+                               final String name, final String desc) {
+        mv.visitFieldInsn(opcode, owner, name, desc);
+        if (constructor) {
+            char c = desc.charAt(0);
+            boolean longOrDouble = c == 'J' || c == 'D';
+            switch (opcode) {
+                case GETSTATIC:
+                    pushValue(OTHER);
+                    if (longOrDouble) {
+                        pushValue(OTHER);
                     }
                     break;
-                }
-                case 179: {
-                    this.popValue();
-                    if (b) {
-                        this.popValue();
-                        break;
+                case PUTSTATIC:
+                    popValue();
+                    if (longOrDouble) {
+                        popValue();
                     }
                     break;
-                }
-                case 181: {
-                    this.popValue();
-                    if (b) {
-                        this.popValue();
-                        this.popValue();
-                        break;
+                case PUTFIELD:
+                    popValue();
+                    if (longOrDouble) {
+                        popValue();
+                        popValue();
                     }
                     break;
-                }
-                default: {
-                    if (b) {
-                        this.pushValue(AdviceAdapter.OTHER);
-                        break;
+                // case GETFIELD:
+                default:
+                    if (longOrDouble) {
+                        pushValue(OTHER);
                     }
-                    break;
-                }
             }
         }
     }
-    
-    public void visitIntInsn(final int n, final int n2) {
-        this.mv.visitIntInsn(n, n2);
-        if (this.constructor && n != 188) {
-            this.pushValue(AdviceAdapter.OTHER);
+
+    @Override
+    public void visitIntInsn(final int opcode, final int operand) {
+        mv.visitIntInsn(opcode, operand);
+        if (constructor && opcode != NEWARRAY) {
+            pushValue(OTHER);
         }
     }
-    
-    public void visitLdcInsn(final Object o) {
-        this.mv.visitLdcInsn(o);
-        if (this.constructor) {
-            this.pushValue(AdviceAdapter.OTHER);
-            if (o instanceof Double || o instanceof Long) {
-                this.pushValue(AdviceAdapter.OTHER);
+
+    @Override
+    public void visitLdcInsn(final Object cst) {
+        mv.visitLdcInsn(cst);
+        if (constructor) {
+            pushValue(OTHER);
+            if (cst instanceof Double || cst instanceof Long) {
+                pushValue(OTHER);
             }
         }
     }
-    
-    public void visitMultiANewArrayInsn(final String s, final int n) {
-        this.mv.visitMultiANewArrayInsn(s, n);
-        if (this.constructor) {
-            for (int i = 0; i < n; ++i) {
-                this.popValue();
+
+    @Override
+    public void visitMultiANewArrayInsn(final String desc, final int dims) {
+        mv.visitMultiANewArrayInsn(desc, dims);
+        if (constructor) {
+            for (int i = 0; i < dims; i++) {
+                popValue();
             }
-            this.pushValue(AdviceAdapter.OTHER);
+            pushValue(OTHER);
         }
     }
-    
-    public void visitTypeInsn(final int n, final String s) {
-        this.mv.visitTypeInsn(n, s);
-        if (this.constructor && n == 187) {
-            this.pushValue(AdviceAdapter.OTHER);
+
+    @Override
+    public void visitTypeInsn(final int opcode, final String type) {
+        mv.visitTypeInsn(opcode, type);
+        // ANEWARRAY, CHECKCAST or INSTANCEOF don't change stack
+        if (constructor && opcode == NEW) {
+            pushValue(OTHER);
         }
     }
-    
-    public void visitMethodInsn(final int n, final String s, final String s2, final String s3) {
-        if (this.api >= 327680) {
-            super.visitMethodInsn(n, s, s2, s3);
+
+    @Deprecated
+    @Override
+    public void visitMethodInsn(final int opcode, final String owner,
+                                final String name, final String desc) {
+        if (api >= Opcodes.ASM5) {
+            super.visitMethodInsn(opcode, owner, name, desc);
             return;
         }
-        this.doVisitMethodInsn(n, s, s2, s3, n == 185);
+        doVisitMethodInsn(opcode, owner, name, desc,
+                opcode == Opcodes.INVOKEINTERFACE);
     }
-    
-    public void visitMethodInsn(final int n, final String s, final String s2, final String s3, final boolean b) {
-        if (this.api < 327680) {
-            super.visitMethodInsn(n, s, s2, s3, b);
+
+    @Override
+    public void visitMethodInsn(final int opcode, final String owner,
+                                final String name, final String desc, final boolean itf) {
+        if (api < Opcodes.ASM5) {
+            super.visitMethodInsn(opcode, owner, name, desc, itf);
             return;
         }
-        this.doVisitMethodInsn(n, s, s2, s3, b);
+        doVisitMethodInsn(opcode, owner, name, desc, itf);
     }
-    
-    private void doVisitMethodInsn(final int n, final String s, final String s2, final String s3, final boolean b) {
-        this.mv.visitMethodInsn(n, s, s2, s3, b);
-        if (this.constructor) {
-            final Type[] argumentTypes = Type.getArgumentTypes(s3);
-            for (int i = 0; i < argumentTypes.length; ++i) {
-                this.popValue();
-                if (argumentTypes[i].getSize() == 2) {
-                    this.popValue();
+
+    private void doVisitMethodInsn(int opcode, final String owner,
+                                   final String name, final String desc, final boolean itf) {
+        mv.visitMethodInsn(opcode, owner, name, desc, itf);
+        if (constructor) {
+            Type[] types = Type.getArgumentTypes(desc);
+            for (int i = 0; i < types.length; i++) {
+                popValue();
+                if (types[i].getSize() == 2) {
+                    popValue();
                 }
             }
-            switch (n) {
-                case 182:
-                case 185: {
-                    this.popValue();
+            switch (opcode) {
+                // case INVOKESTATIC:
+                // break;
+                case INVOKEINTERFACE:
+                case INVOKEVIRTUAL:
+                    popValue(); // objectref
                     break;
-                }
-                case 183: {
-                    if (this.popValue() == AdviceAdapter.THIS && !this.superInitialized) {
-                        this.onMethodEnter();
-                        this.superInitialized = true;
-                        this.constructor = false;
-                        break;
+                case INVOKESPECIAL:
+                    Object type = popValue(); // objectref
+                    if (type == THIS && !superInitialized) {
+                        onMethodEnter();
+                        superInitialized = true;
+                        // once super has been initialized it is no longer
+                        // necessary to keep track of stack state
+                        constructor = false;
                     }
                     break;
-                }
             }
-            final Type returnType = Type.getReturnType(s3);
+
+            Type returnType = Type.getReturnType(desc);
             if (returnType != Type.VOID_TYPE) {
-                this.pushValue(AdviceAdapter.OTHER);
+                pushValue(OTHER);
                 if (returnType.getSize() == 2) {
-                    this.pushValue(AdviceAdapter.OTHER);
+                    pushValue(OTHER);
                 }
             }
         }
     }
-    
-    public void visitInvokeDynamicInsn(final String s, final String s2, final Handle handle, final Object... array) {
-        this.mv.visitInvokeDynamicInsn(s, s2, handle, array);
-        if (this.constructor) {
-            final Type[] argumentTypes = Type.getArgumentTypes(s2);
-            for (int i = 0; i < argumentTypes.length; ++i) {
-                this.popValue();
-                if (argumentTypes[i].getSize() == 2) {
-                    this.popValue();
+
+    @Override
+    public void visitInvokeDynamicInsn(String name, String desc, Handle bsm,
+                                       Object... bsmArgs) {
+        mv.visitInvokeDynamicInsn(name, desc, bsm, bsmArgs);
+        if (constructor) {
+            Type[] types = Type.getArgumentTypes(desc);
+            for (int i = 0; i < types.length; i++) {
+                popValue();
+                if (types[i].getSize() == 2) {
+                    popValue();
                 }
             }
-            final Type returnType = Type.getReturnType(s2);
+
+            Type returnType = Type.getReturnType(desc);
             if (returnType != Type.VOID_TYPE) {
-                this.pushValue(AdviceAdapter.OTHER);
+                pushValue(OTHER);
                 if (returnType.getSize() == 2) {
-                    this.pushValue(AdviceAdapter.OTHER);
+                    pushValue(OTHER);
                 }
             }
         }
     }
-    
-    public void visitJumpInsn(final int n, final Label label) {
-        this.mv.visitJumpInsn(n, label);
-        if (this.constructor) {
-            switch (n) {
-                case 153:
-                case 154:
-                case 155:
-                case 156:
-                case 157:
-                case 158:
-                case 198:
-                case 199: {
-                    this.popValue();
+
+    @Override
+    public void visitJumpInsn(final int opcode, final Label label) {
+        mv.visitJumpInsn(opcode, label);
+        if (constructor) {
+            switch (opcode) {
+                case IFEQ:
+                case IFNE:
+                case IFLT:
+                case IFGE:
+                case IFGT:
+                case IFLE:
+                case IFNULL:
+                case IFNONNULL:
+                    popValue();
                     break;
-                }
-                case 159:
-                case 160:
-                case 161:
-                case 162:
-                case 163:
-                case 164:
-                case 165:
-                case 166: {
-                    this.popValue();
-                    this.popValue();
+                case IF_ICMPEQ:
+                case IF_ICMPNE:
+                case IF_ICMPLT:
+                case IF_ICMPGE:
+                case IF_ICMPGT:
+                case IF_ICMPLE:
+                case IF_ACMPEQ:
+                case IF_ACMPNE:
+                    popValue();
+                    popValue();
                     break;
-                }
-                case 168: {
-                    this.pushValue(AdviceAdapter.OTHER);
+                case JSR:
+                    pushValue(OTHER);
                     break;
-                }
             }
-            this.addBranch(label);
+            addBranch(label);
         }
     }
-    
-    public void visitLookupSwitchInsn(final Label label, final int[] array, final Label[] array2) {
-        this.mv.visitLookupSwitchInsn(label, array, array2);
-        if (this.constructor) {
-            this.popValue();
-            this.addBranches(label, array2);
+
+    @Override
+    public void visitLookupSwitchInsn(final Label dflt, final int[] keys,
+                                      final Label[] labels) {
+        mv.visitLookupSwitchInsn(dflt, keys, labels);
+        if (constructor) {
+            popValue();
+            addBranches(dflt, labels);
         }
     }
-    
-    public void visitTableSwitchInsn(final int n, final int n2, final Label label, final Label... array) {
-        this.mv.visitTableSwitchInsn(n, n2, label, array);
-        if (this.constructor) {
-            this.popValue();
-            this.addBranches(label, array);
+
+    @Override
+    public void visitTableSwitchInsn(final int min, final int max,
+                                     final Label dflt, final Label... labels) {
+        mv.visitTableSwitchInsn(min, max, dflt, labels);
+        if (constructor) {
+            popValue();
+            addBranches(dflt, labels);
         }
     }
-    
-    public void visitTryCatchBlock(final Label label, final Label label2, final Label label3, final String s) {
-        super.visitTryCatchBlock(label, label2, label3, s);
-        if (this.constructor && !this.branches.containsKey(label3)) {
-            final ArrayList<Object> list = new ArrayList<Object>();
-            list.add(AdviceAdapter.OTHER);
-            this.branches.put(label3, list);
+
+    @Override
+    public void visitTryCatchBlock(Label start, Label end, Label handler,
+                                   String type) {
+        super.visitTryCatchBlock(start, end, handler, type);
+        if (constructor && !branches.containsKey(handler)) {
+            List<Object> stackFrame = new ArrayList<Object>();
+            stackFrame.add(OTHER);
+            branches.put(handler, stackFrame);
         }
     }
-    
-    private void addBranches(final Label label, final Label[] array) {
-        this.addBranch(label);
-        for (int i = 0; i < array.length; ++i) {
-            this.addBranch(array[i]);
+
+    private void addBranches(final Label dflt, final Label[] labels) {
+        addBranch(dflt);
+        for (int i = 0; i < labels.length; i++) {
+            addBranch(labels[i]);
         }
     }
-    
+
     private void addBranch(final Label label) {
-        if (this.branches.containsKey(label)) {
+        if (branches.containsKey(label)) {
             return;
         }
-        this.branches.put(label, new ArrayList(this.stackFrame));
+        branches.put(label, new ArrayList<Object>(stackFrame));
     }
-    
+
     private Object popValue() {
-        return this.stackFrame.remove(this.stackFrame.size() - 1);
+        return stackFrame.remove(stackFrame.size() - 1);
     }
-    
+
     private Object peekValue() {
-        return this.stackFrame.get(this.stackFrame.size() - 1);
+        return stackFrame.get(stackFrame.size() - 1);
     }
-    
+
     private void pushValue(final Object o) {
-        this.stackFrame.add(o);
+        stackFrame.add(o);
     }
-    
+
+    /**
+     * Called at the beginning of the method or after super class call in
+     * the constructor. <br>
+     * <br>
+     *
+     * <i>Custom code can use or change all the local variables, but should not
+     * change state of the stack.</i>
+     */
     protected void onMethodEnter() {
     }
-    
-    protected void onMethodExit(final int n) {
+
+    /**
+     * Called before explicit exit from the method using either return or throw.
+     * Top element on the stack contains the return value or exception instance.
+     * For example:
+     *
+     * <pre>
+     *   public void onMethodExit(int opcode) {
+     *     if(opcode==RETURN) {
+     *         visitInsn(ACONST_NULL);
+     *     } else if(opcode==ARETURN || opcode==ATHROW) {
+     *         dup();
+     *     } else {
+     *         if(opcode==LRETURN || opcode==DRETURN) {
+     *             dup2();
+     *         } else {
+     *             dup();
+     *         }
+     *         box(Type.getReturnType(this.methodDesc));
+     *     }
+     *     visitIntInsn(SIPUSH, opcode);
+     *     visitMethodInsn(INVOKESTATIC, owner, "onExit", "(Ljava/lang/Object;I)V");
+     *   }
+     *
+     *   // an actual call back method
+     *   public static void onExit(Object param, int opcode) {
+     *     ...
+     * </pre>
+     *
+     * <br>
+     * <br>
+     *
+     * <i>Custom code can use or change all the local variables, but should not
+     * change state of the stack.</i>
+     *
+     * @param opcode
+     *            one of the RETURN, IRETURN, FRETURN, ARETURN, LRETURN, DRETURN
+     *            or ATHROW
+     *
+     */
+    protected void onMethodExit(int opcode) {
     }
-    
-    static {
-        _clinit_();
-        THIS = new Object();
-        OTHER = new Object();
-    }
-    
-    static /* synthetic */ void _clinit_() {
-    }
+
+    // TODO onException, onMethodCall
 }

@@ -1,65 +1,76 @@
-// 
-// Decompiled by Procyon v0.5.29
-// 
+/*
+ * Copyright (C) 2009 The Guava Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package com.newrelic.agent.deps.com.google.common.collect;
 
-import java.util.Comparator;
-import java.util.List;
-import javax.annotation.Nullable;
-import com.newrelic.agent.deps.com.google.common.base.MoreObjects;
-import java.util.Iterator;
-import java.util.Set;
-import java.util.Collection;
-import java.util.Map;
-import com.newrelic.agent.deps.com.google.common.base.Preconditions;
+import static com.newrelic.agent.deps.com.google.common.base.Preconditions.checkNotNull;
+
 import com.newrelic.agent.deps.com.google.common.annotations.GwtCompatible;
 
+import java.util.Map;
+
+/**
+ * An implementation of {@link ImmutableTable} that holds a single cell.
+ *
+ * @author Gregory Kick
+ */
 @GwtCompatible
-class SingletonImmutableTable<R, C, V> extends ImmutableTable<R, C, V>
-{
+class SingletonImmutableTable<R, C, V> extends ImmutableTable<R, C, V> {
     final R singleRowKey;
     final C singleColumnKey;
     final V singleValue;
-    
-    SingletonImmutableTable(final R rowKey, final C columnKey, final V value) {
-        this.singleRowKey = Preconditions.checkNotNull(rowKey);
-        this.singleColumnKey = Preconditions.checkNotNull(columnKey);
-        this.singleValue = Preconditions.checkNotNull(value);
+
+    SingletonImmutableTable(R rowKey, C columnKey, V value) {
+        this.singleRowKey = checkNotNull(rowKey);
+        this.singleColumnKey = checkNotNull(columnKey);
+        this.singleValue = checkNotNull(value);
     }
-    
-    SingletonImmutableTable(final Table.Cell<R, C, V> cell) {
+
+    SingletonImmutableTable(Cell<R, C, V> cell) {
         this(cell.getRowKey(), cell.getColumnKey(), cell.getValue());
     }
-    
-    @Override
-    public ImmutableMap<R, V> column(final C columnKey) {
-        Preconditions.checkNotNull(columnKey);
-        return this.containsColumn(columnKey) ? ImmutableMap.of(this.singleRowKey, this.singleValue) : ImmutableMap.of();
+
+    @Override public ImmutableMap<R, V> column(C columnKey) {
+        checkNotNull(columnKey);
+        return containsColumn(columnKey)
+                ? ImmutableMap.of(singleRowKey, singleValue)
+                : ImmutableMap.<R, V>of();
     }
-    
-    @Override
-    public ImmutableMap<C, Map<R, V>> columnMap() {
-        return (ImmutableMap<C, Map<R, V>>)ImmutableMap.of(this.singleColumnKey, ImmutableMap.of(this.singleRowKey, this.singleValue));
+
+    @Override public ImmutableMap<C, Map<R, V>> columnMap() {
+        return ImmutableMap.of(singleColumnKey,
+                (Map<R, V>) ImmutableMap.of(singleRowKey, singleValue));
     }
-    
-    @Override
-    public ImmutableMap<R, Map<C, V>> rowMap() {
-        return (ImmutableMap<R, Map<C, V>>)ImmutableMap.of(this.singleRowKey, ImmutableMap.of(this.singleColumnKey, this.singleValue));
+
+    @Override public ImmutableMap<R, Map<C, V>> rowMap() {
+        return ImmutableMap.of(singleRowKey,
+                (Map<C, V>) ImmutableMap.of(singleColumnKey, singleValue));
     }
-    
-    @Override
-    public int size() {
+
+    @Override public int size() {
         return 1;
     }
-    
+
     @Override
-    ImmutableSet<Table.Cell<R, C, V>> createCellSet() {
-        return ImmutableSet.of(ImmutableTable.cellOf(this.singleRowKey, this.singleColumnKey, this.singleValue));
+    ImmutableSet<Cell<R, C, V>> createCellSet() {
+        return ImmutableSet.of(
+                cellOf(singleRowKey, singleColumnKey, singleValue));
     }
-    
-    @Override
-    ImmutableCollection<V> createValues() {
-        return ImmutableSet.of(this.singleValue);
+
+    @Override ImmutableCollection<V> createValues() {
+        return ImmutableSet.of(singleValue);
     }
 }

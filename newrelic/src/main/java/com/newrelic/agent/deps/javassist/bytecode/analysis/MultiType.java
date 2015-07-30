@@ -1,242 +1,313 @@
-// 
-// Decompiled by Procyon v0.5.29
-// 
-
+/*
+ * Javassist, a Java-bytecode translator toolkit.
+ * Copyright (C) 1999- Shigeru Chiba. All Rights Reserved.
+ *
+ * The contents of this file are subject to the Mozilla Public License Version
+ * 1.1 (the "License"); you may not use this file except in compliance with
+ * the License.  Alternatively, the contents of this file may be used under
+ * the terms of the GNU Lesser General Public License Version 2.1 or later,
+ * or the Apache License Version 2.0.
+ *
+ * Software distributed under the License is distributed on an "AS IS" basis,
+ * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
+ * for the specific language governing rights and limitations under the
+ * License.
+ */
 package com.newrelic.agent.deps.javassist.bytecode.analysis;
 
-import java.util.Iterator;
 import java.util.HashMap;
-import com.newrelic.agent.deps.javassist.CtClass;
+import java.util.Iterator;
 import java.util.Map;
 
-public class MultiType extends Type
-{
+import com.newrelic.agent.deps.javassist.CtClass;
+
+/**
+ * MultiType represents an unresolved type. Whenever two <literal>Type</literal>
+ * instances are merged, if they share more than one super type (either an
+ * interface or a superclass), then a <literal>MultiType</literal> is used to
+ * represent the possible super types. The goal of a <literal>MultiType</literal>
+ * is to reduce the set of possible types down to a single resolved type. This
+ * is done by eliminating non-assignable types from the typeset when the
+ * <literal>MultiType</literal> is passed as an argument to
+ * {@link Type#isAssignableFrom(Type)}, as well as removing non-intersecting
+ * types during a merge.
+ *
+ * Note: Currently the <litera>MultiType</literal> instance is reused as much
+ * as possible so that updates are visible from all frames. In addition, all
+ * <literal>MultiType</literal> merge paths are also updated. This is somewhat
+ * hackish, but it appears to handle most scenarios.
+ *
+ * @author Jason T. Greene
+ */
+
+/* TODO - A better, but more involved, approach would be to track the instruction
+ * offset that resulted in the creation of this type, and
+ * whenever the typeset changes, to force a merge on that position. This
+ * would require creating a new MultiType instance every time the typeset
+ * changes, and somehow communicating assignment changes to the Analyzer
+ */
+public class MultiType extends Type {
     private Map interfaces;
     private Type resolved;
     private Type potentialClass;
     private MultiType mergeSource;
-    private boolean changed;
-    
-    public MultiType(final Map interfaces) {
+    private boolean changed = false;
+
+    public MultiType(Map interfaces) {
         this(interfaces, null);
     }
-    
-    public MultiType(final Map interfaces, final Type potentialClass) {
+
+    public MultiType(Map interfaces, Type potentialClass) {
         super(null);
-        this.changed = false;
         this.interfaces = interfaces;
         this.potentialClass = potentialClass;
     }
-    
-    @Override
+
+    /**
+     * Gets the class that corresponds with this type. If this information
+     * is not yet known, java.lang.Object will be returned.
+     */
     public CtClass getCtClass() {
-        if (this.resolved != null) {
-            return this.resolved.getCtClass();
-        }
+        if (resolved != null)
+            return resolved.getCtClass();
+
         return Type.OBJECT.getCtClass();
     }
-    
-    @Override
+
+    /**
+     * Always returns null since this type is never used for an array.
+     */
     public Type getComponent() {
         return null;
     }
-    
-    @Override
+
+    /**
+     * Always returns 1, since this type is a reference.
+     */
     public int getSize() {
         return 1;
     }
-    
-    @Override
+
+    /**
+     * Always reutnrs false since this type is never used for an array
+     */
     public boolean isArray() {
         return false;
     }
-    
-    @Override
+
+    /**
+     * Returns true if the internal state has changed.
+     */
     boolean popChanged() {
-        final boolean changed = this.changed;
+        boolean changed = this.changed;
         this.changed = false;
         return changed;
     }
-    
-    @Override
-    public boolean isAssignableFrom(final Type type) {
+
+    public boolean isAssignableFrom(Type type) {
         throw new UnsupportedOperationException("Not implemented");
     }
-    
-    public boolean isAssignableTo(final Type type) {
-        if (this.resolved != null) {
-            return type.isAssignableFrom(this.resolved);
-        }
-        if (Type.OBJECT.equals(type)) {
+
+    public boolean isAssignableTo(Type type) {
+        if (resolved != null)
+            return type.isAssignableFrom(resolved);
+
+        if (Type.OBJECT.equals(type))
+            return true;
+
+        if (potentialClass != null && !type.isAssignableFrom(potentialClass))
+            potentialClass = null;
+
+        Map map = mergeMultiAndSingle(this, type);
+
+        if (map.size() == 1 && potentialClass == null) {
+            // Update previous merge paths to the same resolved type
+            resolved = Type.get((CtClass)map.values().iterator().next());
+            propogateResolved();
+
             return true;
         }
-        if (this.potentialClass != null && !type.isAssignableFrom(this.potentialClass)) {
-            this.potentialClass = null;
-        }
-        final Map map = this.mergeMultiAndSingle(this, type);
-        if (map.size() == 1 && this.potentialClass == null) {
-            this.resolved = Type.get(map.values().iterator().next());
-            this.propogateResolved();
-            return true;
-        }
+
+        // Keep all previous merge paths up to date
         if (map.size() >= 1) {
-            this.interfaces = map;
-            this.propogateState();
+            interfaces = map;
+            propogateState();
+
             return true;
         }
-        if (this.potentialClass != null) {
-            this.resolved = this.potentialClass;
-            this.propogateResolved();
+
+        if (potentialClass != null) {
+            resolved = potentialClass;
+            propogateResolved();
+
             return true;
         }
+
         return false;
     }
-    
+
     private void propogateState() {
-        for (MultiType source = this.mergeSource; source != null; source = source.mergeSource) {
-            source.interfaces = this.interfaces;
-            source.potentialClass = this.potentialClass;
+        MultiType source = mergeSource;
+        while (source != null) {
+            source.interfaces = interfaces;
+            source.potentialClass = potentialClass;
+            source = source.mergeSource;
         }
     }
-    
+
     private void propogateResolved() {
-        for (MultiType source = this.mergeSource; source != null; source = source.mergeSource) {
-            source.resolved = this.resolved;
+        MultiType source = mergeSource;
+        while (source != null) {
+            source.resolved = resolved;
+            source = source.mergeSource;
         }
     }
-    
-    @Override
+
+    /**
+     * Always returns true, since this type is always a reference.
+     *
+     * @return true
+     */
     public boolean isReference() {
         return true;
     }
-    
-    private Map getAllMultiInterfaces(final MultiType type) {
-        final Map map = new HashMap();
-        for (final CtClass intf : type.interfaces.values()) {
+
+    private Map getAllMultiInterfaces(MultiType type) {
+        Map map = new HashMap();
+
+        Iterator iter = type.interfaces.values().iterator();
+        while (iter.hasNext()) {
+            CtClass intf = (CtClass)iter.next();
             map.put(intf.getName(), intf);
-            this.getAllInterfaces(intf, map);
+            getAllInterfaces(intf, map);
         }
+
         return map;
     }
-    
-    private Map mergeMultiInterfaces(final MultiType type1, final MultiType type2) {
-        final Map map1 = this.getAllMultiInterfaces(type1);
-        final Map map2 = this.getAllMultiInterfaces(type2);
-        return this.findCommonInterfaces(map1, map2);
+
+
+    private Map mergeMultiInterfaces(MultiType type1, MultiType type2) {
+        Map map1 = getAllMultiInterfaces(type1);
+        Map map2 = getAllMultiInterfaces(type2);
+
+        return findCommonInterfaces(map1, map2);
     }
-    
-    private Map mergeMultiAndSingle(final MultiType multi, final Type single) {
-        final Map map1 = this.getAllMultiInterfaces(multi);
-        final Map map2 = this.getAllInterfaces(single.getCtClass(), null);
-        return this.findCommonInterfaces(map1, map2);
+
+    private Map mergeMultiAndSingle(MultiType multi, Type single) {
+        Map map1 = getAllMultiInterfaces(multi);
+        Map map2 = getAllInterfaces(single.getCtClass(), null);
+
+        return findCommonInterfaces(map1, map2);
     }
-    
+
     private boolean inMergeSource(MultiType source) {
         while (source != null) {
-            if (source == this) {
+            if (source == this)
                 return true;
-            }
+
             source = source.mergeSource;
         }
+
         return false;
     }
-    
-    @Override
-    public Type merge(final Type type) {
-        if (this == type) {
+
+    public Type merge(Type type) {
+        if (this == type)
             return this;
-        }
-        if (type == MultiType.UNINIT) {
+
+        if (type == UNINIT)
             return this;
-        }
-        if (type == MultiType.BOGUS) {
-            return MultiType.BOGUS;
-        }
-        if (type == null) {
+
+        if (type == BOGUS)
+            return BOGUS;
+
+        if (type == null)
             return this;
-        }
-        if (this.resolved != null) {
-            return this.resolved.merge(type);
-        }
-        if (this.potentialClass != null) {
-            final Type mergePotential = this.potentialClass.merge(type);
-            if (!mergePotential.equals(this.potentialClass) || mergePotential.popChanged()) {
-                this.potentialClass = (Type.OBJECT.equals(mergePotential) ? null : mergePotential);
-                this.changed = true;
+
+        if (resolved != null)
+            return resolved.merge(type);
+
+        if (potentialClass != null) {
+            Type mergePotential = potentialClass.merge(type);
+            if (! mergePotential.equals(potentialClass) || mergePotential.popChanged()) {
+                potentialClass = Type.OBJECT.equals(mergePotential) ? null : mergePotential;
+                changed = true;
             }
         }
+
         Map merged;
+
         if (type instanceof MultiType) {
-            final MultiType multi = (MultiType)type;
+            MultiType multi = (MultiType)type;
+
             if (multi.resolved != null) {
-                merged = this.mergeMultiAndSingle(this, multi.resolved);
+                merged = mergeMultiAndSingle(this, multi.resolved);
+            } else {
+                merged = mergeMultiInterfaces(multi, this);
+                if (! inMergeSource(multi))
+                    mergeSource = multi;
             }
-            else {
-                merged = this.mergeMultiInterfaces(multi, this);
-                if (!this.inMergeSource(multi)) {
-                    this.mergeSource = multi;
-                }
-            }
+        } else {
+            merged = mergeMultiAndSingle(this, type);
         }
-        else {
-            merged = this.mergeMultiAndSingle(this, type);
-        }
-        if (merged.size() > 1 || (merged.size() == 1 && this.potentialClass != null)) {
-            if (merged.size() != this.interfaces.size()) {
-                this.changed = true;
+
+        // Keep all previous merge paths up to date
+        if (merged.size() > 1 || (merged.size() == 1 && potentialClass != null)) {
+            // Check for changes
+            if (merged.size() != interfaces.size()) {
+                changed = true;
+            } else if (changed == false){
+                Iterator iter = merged.keySet().iterator();
+                while (iter.hasNext())
+                    if (! interfaces.containsKey(iter.next()))
+                        changed = true;
             }
-            else if (!this.changed) {
-                final Iterator iter = merged.keySet().iterator();
-                while (iter.hasNext()) {
-                    if (!this.interfaces.containsKey(iter.next())) {
-                        this.changed = true;
-                    }
-                }
-            }
-            this.interfaces = merged;
-            this.propogateState();
+
+            interfaces = merged;
+            propogateState();
+
             return this;
         }
+
         if (merged.size() == 1) {
-            this.resolved = Type.get(merged.values().iterator().next());
+            resolved = Type.get((CtClass) merged.values().iterator().next());
+        } else if (potentialClass != null){
+            resolved = potentialClass;
+        } else {
+            resolved = OBJECT;
         }
-        else if (this.potentialClass != null) {
-            this.resolved = this.potentialClass;
-        }
-        else {
-            this.resolved = MultiType.OBJECT;
-        }
-        this.propogateResolved();
-        return this.resolved;
+
+        propogateResolved();
+
+        return resolved;
     }
-    
-    @Override
-    public boolean equals(final Object o) {
-        if (!(o instanceof MultiType)) {
+
+    public boolean equals(Object o) {
+        if (! (o instanceof MultiType))
             return false;
-        }
-        final MultiType multi = (MultiType)o;
-        if (this.resolved != null) {
-            return this.resolved.equals(multi.resolved);
-        }
-        return multi.resolved == null && this.interfaces.keySet().equals(multi.interfaces.keySet());
+
+        MultiType multi = (MultiType) o;
+        if (resolved != null)
+            return resolved.equals(multi.resolved);
+        else if (multi.resolved != null)
+            return false;
+
+        return interfaces.keySet().equals(multi.interfaces.keySet());
     }
-    
-    @Override
+
     public String toString() {
-        if (this.resolved != null) {
-            return this.resolved.toString();
-        }
-        final StringBuffer buffer = new StringBuffer("{");
-        final Iterator iter = this.interfaces.keySet().iterator();
+        if (resolved != null)
+            return resolved.toString();
+
+        StringBuffer buffer = new StringBuffer("{");
+        Iterator iter = interfaces.keySet().iterator();
         while (iter.hasNext()) {
             buffer.append(iter.next());
             buffer.append(", ");
         }
         buffer.setLength(buffer.length() - 2);
-        if (this.potentialClass != null) {
-            buffer.append(", *").append(this.potentialClass.toString());
-        }
+        if (potentialClass != null)
+            buffer.append(", *").append(potentialClass.toString());
         buffer.append("}");
         return buffer.toString();
     }

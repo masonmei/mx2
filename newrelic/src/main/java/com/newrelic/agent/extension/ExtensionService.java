@@ -25,6 +25,7 @@ import com.newrelic.agent.deps.com.google.common.collect.Sets;
 import java.io.IOException;
 import com.newrelic.agent.config.AgentJarHelper;
 import com.newrelic.agent.service.ServiceFactory;
+import com.newrelic.agent.service.module.Jar;
 import com.newrelic.agent.stats.StatsEngine;
 import java.util.Iterator;
 import java.text.MessageFormat;
@@ -59,12 +60,12 @@ public class ExtensionService extends AbstractService implements HarvestListener
     
     public ExtensionService() {
         super(ExtensionService.class.getSimpleName());
-        this.internalExtensions = (Map<String, Extension>)Maps.newHashMap();
+        this.internalExtensions = Maps.newHashMap();
         this.extensions = Collections.emptySet();
-        this.pointCuts = (List<ExtensionClassAndMethodMatcher>)Lists.newArrayList();
-        this.weaveExtensions = (Collection<File>)Lists.newArrayList();
-        this.services = (List<Service>)Lists.newArrayList();
-        this.constructs = (List<ConfigurationConstruct>)Lists.newArrayList();
+        this.pointCuts = Lists.newArrayList();
+        this.weaveExtensions = Lists.newArrayList();
+        this.services = Lists.newArrayList();
+        this.constructs = Lists.newArrayList();
         this.lastReloaded = 0L;
         this.lastReloadedWeaveInstrumentation = 0L;
         this.elementCount = -1;
@@ -188,13 +189,13 @@ public class ExtensionService extends AbstractService implements HarvestListener
             this.lastReloaded = System.currentTimeMillis();
             this.elementCount = xmlFiles.length + ymlFiles.length;
             this.pointCuts.clear();
-            final HashMap<String, Extension> allExtensions = Maps.newHashMap((Map<? extends String, ? extends Extension>)this.internalExtensions);
+            final HashMap<String, Extension> allExtensions = Maps.newHashMap(this.internalExtensions);
             this.loadValidExtensions(xmlFiles, this.extensionParsers.getXmlParser(), allExtensions);
             this.loadValidExtensions(ymlFiles, this.extensionParsers.getYamlParser(), allExtensions);
-            final Set<Extension> externalExtensions = (Set<Extension>)Sets.newHashSet((Iterable<?>)allExtensions.values());
+            final Set<Extension> externalExtensions = Sets.newHashSet(allExtensions.values());
             externalExtensions.removeAll(this.internalExtensions.values());
             final Set<Extension> oldExtensions = this.extensions;
-            this.extensions = Collections.unmodifiableSet((Set<? extends Extension>)externalExtensions);
+            this.extensions = Collections.unmodifiableSet(externalExtensions);
             final JmxService jmxService = ServiceFactory.getJmxService();
             if (jmxService != null) {
                 jmxService.reloadExtensions(oldExtensions, this.extensions);
@@ -207,7 +208,7 @@ public class ExtensionService extends AbstractService implements HarvestListener
                 final Class<?>[] allLoadedClasses = (Class<?>[])ServiceFactory.getAgent().getInstrumentation().getAllLoadedClasses();
                 retransformer.setClassMethodMatchers(this.pointCuts);
                 final Set<Class<?>> classesToRetransform = InstrumentationContext.getMatchingClasses(retransformer.getMatchers(), allLoadedClasses);
-                ReinstrumentUtils.checkClassExistsAndRetransformClasses(new ReinstrumentResult(), Collections.emptyList(), null, classesToRetransform);
+                ReinstrumentUtils.checkClassExistsAndRetransformClasses(new ReinstrumentResult(), Collections.<ExtensionClassAndMethodMatcher>emptyList(), null, classesToRetransform);
             }
         }
     }
@@ -354,7 +355,7 @@ public class ExtensionService extends AbstractService implements HarvestListener
     
     private Collection<JarExtension> loadJarExtensions(final File jarDirectory) {
         if (jarDirectory == null || !jarDirectory.exists()) {
-            return (Collection<JarExtension>)Collections.emptyList();
+            return Collections.<JarExtension>emptyList();
         }
         if (jarDirectory.isDirectory()) {
             return this.loadJars(jarDirectory.listFiles(ExtensionFileTypes.JAR.getFilter()));
@@ -362,7 +363,7 @@ public class ExtensionService extends AbstractService implements HarvestListener
         if (jarDirectory.exists()) {
             return this.loadJars(new File[] { jarDirectory });
         }
-        return (Collection<JarExtension>)Collections.emptyList();
+        return Collections.<JarExtension>emptyList();
     }
     
     private Collection<JarExtension> loadJars(final File[] jarFiles) {

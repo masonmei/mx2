@@ -52,9 +52,9 @@ public class ClassWeaverService
     private final Set<InstrumentationPackage> internalInstrumentationPackages;
     
     public ClassWeaverService(final InstrumentationContextManager contextManager) {
-        this.instrumentationPackageNames = (Map<String, InstrumentationPackage>)Maps.newConcurrentMap();
-        this.instrumentationPackages = (Set<InstrumentationPackage>)Sets.newCopyOnWriteArraySet();
-        this.internalInstrumentationPackages = (Set<InstrumentationPackage>)Sets.newCopyOnWriteArraySet();
+        this.instrumentationPackageNames = Maps.newConcurrentMap();
+        this.instrumentationPackages = Sets.newCopyOnWriteArraySet();
+        this.internalInstrumentationPackages = Sets.newCopyOnWriteArraySet();
         this.contextManager = contextManager;
     }
     
@@ -127,18 +127,18 @@ public class ClassWeaverService
     }
     
     private Runnable reloadInstrumentationPackages(final Collection<File> weaveExtensions, final boolean retransformInternalInstrumentationPackageMatches) {
-        final Collection<ClassMatchVisitorFactory> unloadedMatchers = (Collection<ClassMatchVisitorFactory>)Sets.newHashSet();
-        final Set<InstrumentationPackage> toClose = (Set<InstrumentationPackage>)Sets.newHashSet((Iterable<?>)this.instrumentationPackages);
+        final Collection<ClassMatchVisitorFactory> unloadedMatchers = Sets.newHashSet();
+        final Set<InstrumentationPackage> toClose = Sets.newHashSet(this.instrumentationPackages);
         for (final InstrumentationPackage ip : this.instrumentationPackages) {
             unloadedMatchers.add(ip.getMatcher());
             this.removeInstrumentationPackage(ip);
         }
-        final Collection<ClassMatchVisitorFactory> loadedMatchers = (Collection<ClassMatchVisitorFactory>)Sets.newHashSet();
+        final Collection<ClassMatchVisitorFactory> loadedMatchers = Sets.newHashSet();
         this.instrumentationPackages.clear();
         this.instrumentationPackages.addAll(this.getInstrumentationPackages(weaveExtensions));
         loadedMatchers.addAll(this.buildTransformers(retransformInternalInstrumentationPackageMatches));
         if (!retransformInternalInstrumentationPackageMatches) {
-            final Collection<ClassDefinition> existingClasses = (Collection<ClassDefinition>)Lists.newLinkedList();
+            final Collection<ClassDefinition> existingClasses = Lists.newLinkedList();
             for (final InstrumentationPackage ip2 : this.instrumentationPackages) {
                 final Iterator<InstrumentationPackage> iterator = toClose.iterator();
                 while (iterator.hasNext()) {
@@ -169,7 +169,7 @@ public class ClassWeaverService
                 }
             }
         }
-        final Collection<ClassMatchVisitorFactory> matchers = (Collection<ClassMatchVisitorFactory>)Sets.newHashSet((Iterable<?>)loadedMatchers);
+        final Collection<ClassMatchVisitorFactory> matchers = Sets.newHashSet(loadedMatchers);
         matchers.addAll(unloadedMatchers);
         return new Runnable() {
             public void run() {
@@ -199,7 +199,7 @@ public class ClassWeaverService
             this.addWeavingClassTransformer(transformer);
             transformer.instrumentationPackage.getLogger().debug("Registered " + transformer.instrumentationPackage.getImplementationTitle());
         }
-        final Collection<ClassMatchVisitorFactory> matchers = (Collection<ClassMatchVisitorFactory>)Sets.newHashSet();
+        final Collection<ClassMatchVisitorFactory> matchers = Sets.newHashSet();
         if (retransformInternalInstrumentationPackageMatches) {
             for (final WeavingClassTransformer transformer2 : transformers) {
                 matchers.add(transformer2.instrumentationPackage.getMatcher());
@@ -214,7 +214,7 @@ public class ClassWeaverService
     }
     
     private List<WeavingClassTransformer> createTransformers(final Set<InstrumentationPackage> instrumentationPackages) {
-        final List<WeavingClassTransformer> transformers = (List<WeavingClassTransformer>)Lists.newLinkedList();
+        final List<WeavingClassTransformer> transformers = Lists.newLinkedList();
         for (final InstrumentationPackage instrumentationPackage : instrumentationPackages) {
             try {
                 final WeavingClassTransformer transformer = this.getTransformer(instrumentationPackage, instrumentationPackage.getLocation());
@@ -232,7 +232,7 @@ public class ClassWeaverService
     }
     
     private Set<InstrumentationPackage> getInstrumentationPackages(final Collection<File> weaveExtensions) {
-        final Set<InstrumentationPackage> instrumentationPackages = (Set<InstrumentationPackage>)Sets.newHashSet();
+        final Set<InstrumentationPackage> instrumentationPackages = Sets.newHashSet();
         for (final File file : weaveExtensions) {
             if (!file.exists()) {
                 Agent.LOG.error("Unable to find instrumentation jar: " + file.getAbsolutePath());
@@ -266,7 +266,7 @@ public class ClassWeaverService
     }
     
     private Set<InstrumentationPackage> getInternalInstrumentationPackages(final Collection<String> jarFileNames) {
-        final Set<InstrumentationPackage> instrumentationPackages = (Set<InstrumentationPackage>)Sets.newHashSet();
+        final Set<InstrumentationPackage> instrumentationPackages = Sets.newHashSet();
         for (final String name : jarFileNames) {
             final URL instrumentationUrl = BootstrapAgent.class.getResource('/' + name);
             if (instrumentationUrl == null) {
@@ -329,10 +329,10 @@ public class ClassWeaverService
     }
     
     private Set<InstrumentationPackage> filter(final Set<InstrumentationPackage> instrumentationPackages, final Set<InstrumentationPackage> internalInstrumentationPackages) {
-        final Set<InstrumentationPackage> filteredPackages = (Set<InstrumentationPackage>)Sets.newHashSet();
+        final Set<InstrumentationPackage> filteredPackages = Sets.newHashSet();
         filteredPackages.addAll(instrumentationPackages);
         filteredPackages.addAll(internalInstrumentationPackages);
-        final Map<String, InstrumentationPackage> filtered = (Map<String, InstrumentationPackage>)Maps.newHashMap();
+        final Map<String, InstrumentationPackage> filtered = Maps.newHashMap();
         for (final InstrumentationPackage instrumentationPackage : filteredPackages) {
             final InstrumentationPackage existing = filtered.get(instrumentationPackage.getImplementationTitle());
             if (existing != null) {

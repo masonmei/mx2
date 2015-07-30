@@ -1,543 +1,1009 @@
-// 
-// Decompiled by Procyon v0.5.29
-// 
-
+/***
+ * ASM: a very small and fast Java bytecode manipulation framework
+ * Copyright (c) 2000-2011 INRIA, France Telecom
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. Neither the name of the copyright holders nor the names of its
+ *    contributors may be used to endorse or promote products derived from
+ *    this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE.
+ */
 package com.newrelic.agent.deps.org.objectweb.asm.util;
 
-import com.newrelic.agent.deps.org.objectweb.asm.Attribute;
-import com.newrelic.agent.deps.org.objectweb.asm.TypePath;
-import com.newrelic.agent.deps.org.objectweb.asm.AnnotationVisitor;
-import com.newrelic.agent.deps.org.objectweb.asm.FieldVisitor;
-import java.util.HashMap;
-import com.newrelic.agent.deps.org.objectweb.asm.tree.analysis.Frame;
-import com.newrelic.agent.deps.org.objectweb.asm.tree.TryCatchBlockNode;
-import com.newrelic.agent.deps.org.objectweb.asm.tree.analysis.BasicValue;
-import com.newrelic.agent.deps.org.objectweb.asm.MethodVisitor;
-import java.util.Iterator;
-import com.newrelic.agent.deps.org.objectweb.asm.tree.analysis.Interpreter;
-import com.newrelic.agent.deps.org.objectweb.asm.tree.analysis.Analyzer;
-import java.util.List;
-import com.newrelic.agent.deps.org.objectweb.asm.tree.analysis.SimpleVerifier;
-import com.newrelic.agent.deps.org.objectweb.asm.tree.MethodNode;
-import java.util.ArrayList;
-import com.newrelic.agent.deps.org.objectweb.asm.Type;
-import com.newrelic.agent.deps.org.objectweb.asm.tree.ClassNode;
-import java.io.OutputStream;
-import java.io.PrintWriter;
-import java.io.InputStream;
-import com.newrelic.agent.deps.org.objectweb.asm.ClassReader;
 import java.io.FileInputStream;
+import java.io.PrintWriter;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
-import com.newrelic.agent.deps.org.objectweb.asm.ClassVisitor;
 
-public class CheckClassAdapter extends ClassVisitor
-{
+import com.newrelic.agent.deps.org.objectweb.asm.AnnotationVisitor;
+import com.newrelic.agent.deps.org.objectweb.asm.Attribute;
+import com.newrelic.agent.deps.org.objectweb.asm.ClassReader;
+import com.newrelic.agent.deps.org.objectweb.asm.ClassVisitor;
+import com.newrelic.agent.deps.org.objectweb.asm.FieldVisitor;
+import com.newrelic.agent.deps.org.objectweb.asm.Label;
+import com.newrelic.agent.deps.org.objectweb.asm.MethodVisitor;
+import com.newrelic.agent.deps.org.objectweb.asm.Opcodes;
+import com.newrelic.agent.deps.org.objectweb.asm.Type;
+import com.newrelic.agent.deps.org.objectweb.asm.TypePath;
+import com.newrelic.agent.deps.org.objectweb.asm.TypeReference;
+import com.newrelic.agent.deps.org.objectweb.asm.tree.ClassNode;
+import com.newrelic.agent.deps.org.objectweb.asm.tree.MethodNode;
+import com.newrelic.agent.deps.org.objectweb.asm.tree.analysis.Analyzer;
+import com.newrelic.agent.deps.org.objectweb.asm.tree.analysis.BasicValue;
+import com.newrelic.agent.deps.org.objectweb.asm.tree.analysis.Frame;
+import com.newrelic.agent.deps.org.objectweb.asm.tree.analysis.SimpleVerifier;
+
+/**
+ * A {@link ClassVisitor} that checks that its methods are properly used. More
+ * precisely this class adapter checks each method call individually, based
+ * <i>only</i> on its arguments, but does <i>not</i> check the <i>sequence</i>
+ * of method calls. For example, the invalid sequence
+ * <tt>visitField(ACC_PUBLIC, "i", "I", null)</tt> <tt>visitField(ACC_PUBLIC,
+ * "i", "D", null)</tt> will <i>not</i> be detected by this class adapter.
+ *
+ * <p>
+ * <code>CheckClassAdapter</code> can be also used to verify bytecode
+ * transformations in order to make sure transformed bytecode is sane. For
+ * example:
+ *
+ * <pre>
+ *   InputStream is = ...; // get bytes for the source class
+ *   ClassReader cr = new ClassReader(is);
+ *   ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
+ *   ClassVisitor cv = new <b>MyClassAdapter</b>(new CheckClassAdapter(cw));
+ *   cr.accept(cv, 0);
+ *
+ *   StringWriter sw = new StringWriter();
+ *   PrintWriter pw = new PrintWriter(sw);
+ *   CheckClassAdapter.verify(new ClassReader(cw.toByteArray()), false, pw);
+ *   assertTrue(sw.toString(), sw.toString().length()==0);
+ * </pre>
+ *
+ * Above code runs transformed bytecode trough the
+ * <code>CheckClassAdapter</code>. It won't be exactly the same verification as
+ * JVM does, but it run data flow analysis for the code of each method and
+ * checks that expectations are met for each method instruction.
+ *
+ * <p>
+ * If method bytecode has errors, assertion text will show the erroneous
+ * instruction number and dump of the failed method with information about
+ * locals and stack slot for each instruction. For example (format is -
+ * insnNumber locals : stack):
+ *
+ * <pre>
+ * com.newrelic.deps.org.objectweb.asm.tree.analysis.AnalyzerException: Error at instruction 71: Expected I, but found .
+ *   at com.newrelic.deps.org.objectweb.asm.tree.analysis.Analyzer.analyze(Analyzer.java:289)
+ *   at com.newrelic.deps.org.objectweb.asm.util.CheckClassAdapter.verify(CheckClassAdapter.java:135)
+ * ...
+ * remove()V
+ * 00000 LinkedBlockingQueue$Itr . . . . . . . .  :
+ *   ICONST_0
+ * 00001 LinkedBlockingQueue$Itr . . . . . . . .  : I
+ *   ISTORE 2
+ * 00001 LinkedBlockingQueue$Itr <b>.</b> I . . . . . .  :
+ * ...
+ *
+ * 00071 LinkedBlockingQueue$Itr <b>.</b> I . . . . . .  :
+ *   ILOAD 1
+ * 00072 <b>?</b>
+ *   INVOKESPECIAL java/lang/Integer.&lt;init&gt; (I)V
+ * ...
+ * </pre>
+ *
+ * In the above output you can see that variable 1 loaded by
+ * <code>ILOAD 1</code> instruction at position <code>00071</code> is not
+ * initialized. You can also see that at the beginning of the method (code
+ * inserted by the transformation) variable 2 is initialized.
+ *
+ * <p>
+ * Note that when used like that, <code>CheckClassAdapter.verify()</code> can
+ * trigger additional class loading, because it is using
+ * <code>SimpleVerifier</code>.
+ *
+ * @author Eric Bruneton
+ */
+public class CheckClassAdapter extends ClassVisitor {
+
+    /**
+     * The class version number.
+     */
     private int version;
+
+    /**
+     * <tt>true</tt> if the visit method has been called.
+     */
     private boolean start;
+
+    /**
+     * <tt>true</tt> if the visitSource method has been called.
+     */
     private boolean source;
+
+    /**
+     * <tt>true</tt> if the visitOuterClass method has been called.
+     */
     private boolean outer;
+
+    /**
+     * <tt>true</tt> if the visitEnd method has been called.
+     */
     private boolean end;
-    private Map labels;
+
+    /**
+     * The already visited labels. This map associate Integer values to Label
+     * keys.
+     */
+    private Map<Label, Integer> labels;
+
+    /**
+     * <tt>true</tt> if the method code must be checked with a BasicVerifier.
+     */
     private boolean checkDataFlow;
-    static /* synthetic */ Class class$org$objectweb$asm$util$CheckClassAdapter;
-    
-    public static void main(final String[] array) throws Exception {
-        if (array.length != 1) {
+
+    /**
+     * Checks a given class.
+     * <p>
+     * Usage: CheckClassAdapter &lt;binary class name or class file name&gt;
+     *
+     * @param args
+     *            the command line arguments.
+     *
+     * @throws Exception
+     *             if the class cannot be found, or if an IO exception occurs.
+     */
+    public static void main(final String[] args) throws Exception {
+        if (args.length != 1) {
             System.err.println("Verifies the given class.");
-            System.err.println("Usage: CheckClassAdapter <fully qualified class name or class file name>");
+            System.err.println("Usage: CheckClassAdapter "
+                    + "<fully qualified class name or class file name>");
             return;
         }
-        ClassReader classReader;
-        if (array[0].endsWith(".class")) {
-            classReader = new ClassReader(new FileInputStream(array[0]));
+        ClassReader cr;
+        if (args[0].endsWith(".class")) {
+            cr = new ClassReader(new FileInputStream(args[0]));
+        } else {
+            cr = new ClassReader(args[0]);
         }
-        else {
-            classReader = new ClassReader(array[0]);
-        }
-        verify(classReader, false, new PrintWriter(System.err));
+
+        verify(cr, false, new PrintWriter(System.err));
     }
-    
-    public static void verify(final ClassReader classReader, final ClassLoader classLoader, final boolean b, final PrintWriter printWriter) {
-        final ClassNode classNode = new ClassNode();
-        classReader.accept(new CheckClassAdapter(classNode, false), 2);
-        final Type type = (classNode.superName == null) ? null : Type.getObjectType(classNode.superName);
-        final List methods = classNode.methods;
-        final ArrayList<Type> list = new ArrayList<Type>();
-        final Iterator iterator = classNode.interfaces.iterator();
-        while (iterator.hasNext()) {
-            list.add(Type.getObjectType(iterator.next()));
+
+    /**
+     * Checks a given class.
+     *
+     * @param cr
+     *            a <code>ClassReader</code> that contains bytecode for the
+     *            analysis.
+     * @param loader
+     *            a <code>ClassLoader</code> which will be used to load
+     *            referenced classes. This is useful if you are verifiying
+     *            multiple interdependent classes.
+     * @param dump
+     *            true if bytecode should be printed out not only when errors
+     *            are found.
+     * @param pw
+     *            write where results going to be printed
+     */
+    public static void verify(final ClassReader cr, final ClassLoader loader,
+                              final boolean dump, final PrintWriter pw) {
+        ClassNode cn = new ClassNode();
+        cr.accept(new CheckClassAdapter(cn, false), ClassReader.SKIP_DEBUG);
+
+        Type syperType = cn.superName == null ? null : Type
+                .getObjectType(cn.superName);
+        List<MethodNode> methods = cn.methods;
+
+        List<Type> interfaces = new ArrayList<Type>();
+        for (Iterator<String> i = cn.interfaces.iterator(); i.hasNext();) {
+            interfaces.add(Type.getObjectType(i.next()));
         }
+
         for (int i = 0; i < methods.size(); ++i) {
-            final MethodNode methodNode = methods.get(i);
-            final SimpleVerifier simpleVerifier = new SimpleVerifier(Type.getObjectType(classNode.name), type, (List)list, (classNode.access & 0x200) != 0x0);
-            final Analyzer analyzer = new Analyzer((Interpreter)simpleVerifier);
-            if (classLoader != null) {
-                simpleVerifier.setClassLoader(classLoader);
+            MethodNode method = methods.get(i);
+            SimpleVerifier verifier = new SimpleVerifier(
+                    Type.getObjectType(cn.name), syperType, interfaces,
+                    (cn.access & Opcodes.ACC_INTERFACE) != 0);
+            Analyzer<BasicValue> a = new Analyzer<BasicValue>(verifier);
+            if (loader != null) {
+                verifier.setClassLoader(loader);
             }
             try {
-                analyzer.analyze(classNode.name, methodNode);
-                if (!b) {
+                a.analyze(cn.name, method);
+                if (!dump) {
                     continue;
                 }
+            } catch (Exception e) {
+                e.printStackTrace(pw);
             }
-            catch (Exception ex) {
-                ex.printStackTrace(printWriter);
-            }
-            printAnalyzerResult(methodNode, analyzer, printWriter);
+            printAnalyzerResult(method, a, pw);
         }
-        printWriter.flush();
+        pw.flush();
     }
-    
-    public static void verify(final ClassReader classReader, final boolean b, final PrintWriter printWriter) {
-        verify(classReader, null, b, printWriter);
+
+    /**
+     * Checks a given class
+     *
+     * @param cr
+     *            a <code>ClassReader</code> that contains bytecode for the
+     *            analysis.
+     * @param dump
+     *            true if bytecode should be printed out not only when errors
+     *            are found.
+     * @param pw
+     *            write where results going to be printed
+     */
+    public static void verify(final ClassReader cr, final boolean dump,
+                              final PrintWriter pw) {
+        verify(cr, null, dump, pw);
     }
-    
-    static void printAnalyzerResult(final MethodNode methodNode, final Analyzer analyzer, final PrintWriter printWriter) {
-        final Frame[] frames = analyzer.getFrames();
-        final Textifier textifier = new Textifier();
-        final TraceMethodVisitor traceMethodVisitor = new TraceMethodVisitor(textifier);
-        printWriter.println(methodNode.name + methodNode.desc);
-        for (int i = 0; i < methodNode.instructions.size(); ++i) {
-            methodNode.instructions.get(i).accept(traceMethodVisitor);
-            final StringBuffer sb = new StringBuffer();
-            final Frame frame = frames[i];
-            if (frame == null) {
+
+    static void printAnalyzerResult(MethodNode method, Analyzer<BasicValue> a,
+                                    final PrintWriter pw) {
+        Frame<BasicValue>[] frames = a.getFrames();
+        Textifier t = new Textifier();
+        TraceMethodVisitor mv = new TraceMethodVisitor(t);
+
+        pw.println(method.name + method.desc);
+        for (int j = 0; j < method.instructions.size(); ++j) {
+            method.instructions.get(j).accept(mv);
+
+            StringBuilder sb = new StringBuilder();
+            Frame<BasicValue> f = frames[j];
+            if (f == null) {
                 sb.append('?');
-            }
-            else {
-                for (int j = 0; j < frame.getLocals(); ++j) {
-                    sb.append(getShortName(((BasicValue)frame.getLocal(j)).toString())).append(' ');
+            } else {
+                for (int k = 0; k < f.getLocals(); ++k) {
+                    sb.append(getShortName(f.getLocal(k).toString()))
+                            .append(' ');
                 }
                 sb.append(" : ");
-                for (int k = 0; k < frame.getStackSize(); ++k) {
-                    sb.append(getShortName(((BasicValue)frame.getStack(k)).toString())).append(' ');
+                for (int k = 0; k < f.getStackSize(); ++k) {
+                    sb.append(getShortName(f.getStack(k).toString()))
+                            .append(' ');
                 }
             }
-            while (sb.length() < methodNode.maxStack + methodNode.maxLocals + 1) {
+            while (sb.length() < method.maxStack + method.maxLocals + 1) {
                 sb.append(' ');
             }
-            printWriter.print(Integer.toString(i + 100000).substring(1));
-            printWriter.print(" " + (Object)sb + " : " + textifier.text.get(textifier.text.size() - 1));
+            pw.print(Integer.toString(j + 100000).substring(1));
+            pw.print(" " + sb + " : " + t.text.get(t.text.size() - 1));
         }
-        for (int l = 0; l < methodNode.tryCatchBlocks.size(); ++l) {
-            ((TryCatchBlockNode)methodNode.tryCatchBlocks.get(l)).accept(traceMethodVisitor);
-            printWriter.print(" " + textifier.text.get(textifier.text.size() - 1));
+        for (int j = 0; j < method.tryCatchBlocks.size(); ++j) {
+            method.tryCatchBlocks.get(j).accept(mv);
+            pw.print(" " + t.text.get(t.text.size() - 1));
         }
-        printWriter.println();
+        pw.println();
     }
-    
-    private static String getShortName(final String s) {
-        final int lastIndex = s.lastIndexOf(47);
-        int length = s.length();
-        if (s.charAt(length - 1) == ';') {
-            --length;
+
+    private static String getShortName(final String name) {
+        int n = name.lastIndexOf('/');
+        int k = name.length();
+        if (name.charAt(k - 1) == ';') {
+            k--;
         }
-        return (lastIndex == -1) ? s : s.substring(lastIndex + 1, length);
+        return n == -1 ? name : name.substring(n + 1, k);
     }
-    
-    public CheckClassAdapter(final ClassVisitor classVisitor) {
-        this(classVisitor, true);
+
+    /**
+     * Constructs a new {@link CheckClassAdapter}. <i>Subclasses must not use
+     * this constructor</i>. Instead, they must use the
+     * {@link #CheckClassAdapter(int, ClassVisitor, boolean)} version.
+     *
+     * @param cv
+     *            the class visitor to which this adapter must delegate calls.
+     */
+    public CheckClassAdapter(final ClassVisitor cv) {
+        this(cv, true);
     }
-    
-    public CheckClassAdapter(final ClassVisitor classVisitor, final boolean b) {
-        this(327680, classVisitor, b);
-        if (this.getClass() != CheckClassAdapter.class$org$objectweb$asm$util$CheckClassAdapter) {
+
+    /**
+     * Constructs a new {@link CheckClassAdapter}. <i>Subclasses must not use
+     * this constructor</i>. Instead, they must use the
+     * {@link #CheckClassAdapter(int, ClassVisitor, boolean)} version.
+     *
+     * @param cv
+     *            the class visitor to which this adapter must delegate calls.
+     * @param checkDataFlow
+     *            <tt>true</tt> to perform basic data flow checks, or
+     *            <tt>false</tt> to not perform any data flow check (see
+     *            {@link CheckMethodAdapter}). This option requires valid
+     *            maxLocals and maxStack values.
+     * @throws IllegalStateException
+     *             If a subclass calls this constructor.
+     */
+    public CheckClassAdapter(final ClassVisitor cv, final boolean checkDataFlow) {
+        this(Opcodes.ASM5, cv, checkDataFlow);
+        if (getClass() != CheckClassAdapter.class) {
             throw new IllegalStateException();
         }
     }
-    
-    protected CheckClassAdapter(final int n, final ClassVisitor classVisitor, final boolean checkDataFlow) {
-        super(n, classVisitor);
-        this.labels = new HashMap();
+
+    /**
+     * Constructs a new {@link CheckClassAdapter}.
+     *
+     * @param api
+     *            the ASM API version implemented by this visitor. Must be one
+     *            of {@link Opcodes#ASM4} or {@link Opcodes#ASM5}.
+     * @param cv
+     *            the class visitor to which this adapter must delegate calls.
+     * @param checkDataFlow
+     *            <tt>true</tt> to perform basic data flow checks, or
+     *            <tt>false</tt> to not perform any data flow check (see
+     *            {@link CheckMethodAdapter}). This option requires valid
+     *            maxLocals and maxStack values.
+     */
+    protected CheckClassAdapter(final int api, final ClassVisitor cv,
+                                final boolean checkDataFlow) {
+        super(api, cv);
+        this.labels = new HashMap<Label, Integer>();
         this.checkDataFlow = checkDataFlow;
     }
-    
-    public void visit(final int version, final int n, final String s, final String s2, final String s3, final String[] array) {
-        if (this.start) {
+
+    // ------------------------------------------------------------------------
+    // Implementation of the ClassVisitor interface
+    // ------------------------------------------------------------------------
+
+    @Override
+    public void visit(final int version, final int access, final String name,
+                      final String signature, final String superName,
+                      final String[] interfaces) {
+        if (start) {
             throw new IllegalStateException("visit must be called only once");
         }
-        this.start = true;
-        this.checkState();
-        checkAccess(n, 423473);
-        if (s == null || !s.endsWith("package-info")) {
-            CheckMethodAdapter.checkInternalName(s, "class name");
+        start = true;
+        checkState();
+        checkAccess(access, Opcodes.ACC_PUBLIC + Opcodes.ACC_FINAL
+                + Opcodes.ACC_SUPER + Opcodes.ACC_INTERFACE
+                + Opcodes.ACC_ABSTRACT + Opcodes.ACC_SYNTHETIC
+                + Opcodes.ACC_ANNOTATION + Opcodes.ACC_ENUM
+                + Opcodes.ACC_DEPRECATED + 0x40000); // ClassWriter.ACC_SYNTHETIC_ATTRIBUTE
+        if (name == null || !name.endsWith("package-info")) {
+            CheckMethodAdapter.checkInternalName(name, "class name");
         }
-        if ("java/lang/Object".equals(s)) {
-            if (s3 != null) {
-                throw new IllegalArgumentException("The super class name of the Object class must be 'null'");
+        if ("java/lang/Object".equals(name)) {
+            if (superName != null) {
+                throw new IllegalArgumentException(
+                        "The super class name of the Object class must be 'null'");
+            }
+        } else {
+            CheckMethodAdapter.checkInternalName(superName, "super class name");
+        }
+        if (signature != null) {
+            checkClassSignature(signature);
+        }
+        if ((access & Opcodes.ACC_INTERFACE) != 0) {
+            if (!"java/lang/Object".equals(superName)) {
+                throw new IllegalArgumentException(
+                        "The super class name of interfaces must be 'java/lang/Object'");
             }
         }
-        else {
-            CheckMethodAdapter.checkInternalName(s3, "super class name");
-        }
-        if (s2 != null) {
-            checkClassSignature(s2);
-        }
-        if ((n & 0x200) != 0x0 && !"java/lang/Object".equals(s3)) {
-            throw new IllegalArgumentException("The super class name of interfaces must be 'java/lang/Object'");
-        }
-        if (array != null) {
-            for (int i = 0; i < array.length; ++i) {
-                CheckMethodAdapter.checkInternalName(array[i], "interface name at index " + i);
+        if (interfaces != null) {
+            for (int i = 0; i < interfaces.length; ++i) {
+                CheckMethodAdapter.checkInternalName(interfaces[i],
+                        "interface name at index " + i);
             }
         }
-        super.visit(this.version = version, n, s, s2, s3, array);
+        this.version = version;
+        super.visit(version, access, name, signature, superName, interfaces);
     }
-    
-    public void visitSource(final String s, final String s2) {
-        this.checkState();
-        if (this.source) {
-            throw new IllegalStateException("visitSource can be called only once.");
+
+    @Override
+    public void visitSource(final String file, final String debug) {
+        checkState();
+        if (source) {
+            throw new IllegalStateException(
+                    "visitSource can be called only once.");
         }
-        this.source = true;
-        super.visitSource(s, s2);
+        source = true;
+        super.visitSource(file, debug);
     }
-    
-    public void visitOuterClass(final String s, final String s2, final String s3) {
-        this.checkState();
-        if (this.outer) {
-            throw new IllegalStateException("visitOuterClass can be called only once.");
+
+    @Override
+    public void visitOuterClass(final String owner, final String name,
+                                final String desc) {
+        checkState();
+        if (outer) {
+            throw new IllegalStateException(
+                    "visitOuterClass can be called only once.");
         }
-        this.outer = true;
-        if (s == null) {
+        outer = true;
+        if (owner == null) {
             throw new IllegalArgumentException("Illegal outer class owner");
         }
-        if (s3 != null) {
-            CheckMethodAdapter.checkMethodDesc(s3);
+        if (desc != null) {
+            CheckMethodAdapter.checkMethodDesc(desc);
         }
-        super.visitOuterClass(s, s2, s3);
+        super.visitOuterClass(owner, name, desc);
     }
-    
-    public void visitInnerClass(final String s, final String s2, final String s3, final int n) {
-        this.checkState();
-        CheckMethodAdapter.checkInternalName(s, "class name");
-        if (s2 != null) {
-            CheckMethodAdapter.checkInternalName(s2, "outer class name");
+
+    @Override
+    public void visitInnerClass(final String name, final String outerName,
+                                final String innerName, final int access) {
+        checkState();
+        CheckMethodAdapter.checkInternalName(name, "class name");
+        if (outerName != null) {
+            CheckMethodAdapter.checkInternalName(outerName, "outer class name");
         }
-        if (s3 != null) {
-            int n2;
-            for (n2 = 0; n2 < s3.length() && Character.isDigit(s3.charAt(n2)); ++n2) {}
-            if (n2 == 0 || n2 < s3.length()) {
-                CheckMethodAdapter.checkIdentifier(s3, n2, -1, "inner class name");
+        if (innerName != null) {
+            int start = 0;
+            while (start < innerName.length()
+                    && Character.isDigit(innerName.charAt(start))) {
+                start++;
+            }
+            if (start == 0 || start < innerName.length()) {
+                CheckMethodAdapter.checkIdentifier(innerName, start, -1,
+                        "inner class name");
             }
         }
-        checkAccess(n, 30239);
-        super.visitInnerClass(s, s2, s3, n);
+        checkAccess(access, Opcodes.ACC_PUBLIC + Opcodes.ACC_PRIVATE
+                + Opcodes.ACC_PROTECTED + Opcodes.ACC_STATIC
+                + Opcodes.ACC_FINAL + Opcodes.ACC_INTERFACE
+                + Opcodes.ACC_ABSTRACT + Opcodes.ACC_SYNTHETIC
+                + Opcodes.ACC_ANNOTATION + Opcodes.ACC_ENUM);
+        super.visitInnerClass(name, outerName, innerName, access);
     }
-    
-    public FieldVisitor visitField(final int n, final String s, final String s2, final String s3, final Object o) {
-        this.checkState();
-        checkAccess(n, 413919);
-        CheckMethodAdapter.checkUnqualifiedName(this.version, s, "field name");
-        CheckMethodAdapter.checkDesc(s2, false);
-        if (s3 != null) {
-            checkFieldSignature(s3);
+
+    @Override
+    public FieldVisitor visitField(final int access, final String name,
+                                   final String desc, final String signature, final Object value) {
+        checkState();
+        checkAccess(access, Opcodes.ACC_PUBLIC + Opcodes.ACC_PRIVATE
+                + Opcodes.ACC_PROTECTED + Opcodes.ACC_STATIC
+                + Opcodes.ACC_FINAL + Opcodes.ACC_VOLATILE
+                + Opcodes.ACC_TRANSIENT + Opcodes.ACC_SYNTHETIC
+                + Opcodes.ACC_ENUM + Opcodes.ACC_DEPRECATED + 0x40000); // ClassWriter.ACC_SYNTHETIC_ATTRIBUTE
+        CheckMethodAdapter.checkUnqualifiedName(version, name, "field name");
+        CheckMethodAdapter.checkDesc(desc, false);
+        if (signature != null) {
+            checkFieldSignature(signature);
         }
-        if (o != null) {
-            CheckMethodAdapter.checkConstant(o);
+        if (value != null) {
+            CheckMethodAdapter.checkConstant(value);
         }
-        return new CheckFieldAdapter(super.visitField(n, s, s2, s3, o));
+        FieldVisitor av = super
+                .visitField(access, name, desc, signature, value);
+        return new CheckFieldAdapter(av);
     }
-    
-    public MethodVisitor visitMethod(final int n, final String s, final String s2, final String s3, final String[] array) {
-        this.checkState();
-        checkAccess(n, 400895);
-        if (!"<init>".equals(s) && !"<clinit>".equals(s)) {
-            CheckMethodAdapter.checkMethodIdentifier(this.version, s, "method name");
+
+    @Override
+    public MethodVisitor visitMethod(final int access, final String name,
+                                     final String desc, final String signature, final String[] exceptions) {
+        checkState();
+        checkAccess(access, Opcodes.ACC_PUBLIC + Opcodes.ACC_PRIVATE
+                + Opcodes.ACC_PROTECTED + Opcodes.ACC_STATIC
+                + Opcodes.ACC_FINAL + Opcodes.ACC_SYNCHRONIZED
+                + Opcodes.ACC_BRIDGE + Opcodes.ACC_VARARGS + Opcodes.ACC_NATIVE
+                + Opcodes.ACC_ABSTRACT + Opcodes.ACC_STRICT
+                + Opcodes.ACC_SYNTHETIC + Opcodes.ACC_DEPRECATED + 0x40000); // ClassWriter.ACC_SYNTHETIC_ATTRIBUTE
+        if (!"<init>".equals(name) && !"<clinit>".equals(name)) {
+            CheckMethodAdapter.checkMethodIdentifier(version, name,
+                    "method name");
         }
-        CheckMethodAdapter.checkMethodDesc(s2);
-        if (s3 != null) {
-            checkMethodSignature(s3);
+        CheckMethodAdapter.checkMethodDesc(desc);
+        if (signature != null) {
+            checkMethodSignature(signature);
         }
-        if (array != null) {
-            for (int i = 0; i < array.length; ++i) {
-                CheckMethodAdapter.checkInternalName(array[i], "exception name at index " + i);
+        if (exceptions != null) {
+            for (int i = 0; i < exceptions.length; ++i) {
+                CheckMethodAdapter.checkInternalName(exceptions[i],
+                        "exception name at index " + i);
             }
         }
-        CheckMethodAdapter checkMethodAdapter;
-        if (this.checkDataFlow) {
-            checkMethodAdapter = new CheckMethodAdapter(n, s, s2, super.visitMethod(n, s, s2, s3, array), this.labels);
+        CheckMethodAdapter cma;
+        if (checkDataFlow) {
+            cma = new CheckMethodAdapter(access, name, desc, super.visitMethod(
+                    access, name, desc, signature, exceptions), labels);
+        } else {
+            cma = new CheckMethodAdapter(super.visitMethod(access, name, desc,
+                    signature, exceptions), labels);
         }
-        else {
-            checkMethodAdapter = new CheckMethodAdapter(super.visitMethod(n, s, s2, s3, array), this.labels);
+        cma.version = version;
+        return cma;
+    }
+
+    @Override
+    public AnnotationVisitor visitAnnotation(final String desc,
+                                             final boolean visible) {
+        checkState();
+        CheckMethodAdapter.checkDesc(desc, false);
+        return new CheckAnnotationAdapter(super.visitAnnotation(desc, visible));
+    }
+
+    @Override
+    public AnnotationVisitor visitTypeAnnotation(final int typeRef,
+                                                 final TypePath typePath, final String desc, final boolean visible) {
+        checkState();
+        int sort = typeRef >>> 24;
+        if (sort != TypeReference.CLASS_TYPE_PARAMETER
+                && sort != TypeReference.CLASS_TYPE_PARAMETER_BOUND
+                && sort != TypeReference.CLASS_EXTENDS) {
+            throw new IllegalArgumentException("Invalid type reference sort 0x"
+                    + Integer.toHexString(sort));
         }
-        checkMethodAdapter.version = this.version;
-        return checkMethodAdapter;
+        checkTypeRefAndPath(typeRef, typePath);
+        CheckMethodAdapter.checkDesc(desc, false);
+        return new CheckAnnotationAdapter(super.visitTypeAnnotation(typeRef,
+                typePath, desc, visible));
     }
-    
-    public AnnotationVisitor visitAnnotation(final String s, final boolean b) {
-        this.checkState();
-        CheckMethodAdapter.checkDesc(s, false);
-        return new CheckAnnotationAdapter(super.visitAnnotation(s, b));
-    }
-    
-    public AnnotationVisitor visitTypeAnnotation(final int n, final TypePath typePath, final String s, final boolean b) {
-        this.checkState();
-        final int n2 = n >>> 24;
-        if (n2 != 0 && n2 != 17 && n2 != 16) {
-            throw new IllegalArgumentException("Invalid type reference sort 0x" + Integer.toHexString(n2));
+
+    @Override
+    public void visitAttribute(final Attribute attr) {
+        checkState();
+        if (attr == null) {
+            throw new IllegalArgumentException(
+                    "Invalid attribute (must not be null)");
         }
-        checkTypeRefAndPath(n, typePath);
-        CheckMethodAdapter.checkDesc(s, false);
-        return new CheckAnnotationAdapter(super.visitTypeAnnotation(n, typePath, s, b));
+        super.visitAttribute(attr);
     }
-    
-    public void visitAttribute(final Attribute attribute) {
-        this.checkState();
-        if (attribute == null) {
-            throw new IllegalArgumentException("Invalid attribute (must not be null)");
-        }
-        super.visitAttribute(attribute);
-    }
-    
+
+    @Override
     public void visitEnd() {
-        this.checkState();
-        this.end = true;
+        checkState();
+        end = true;
         super.visitEnd();
     }
-    
+
+    // ------------------------------------------------------------------------
+    // Utility methods
+    // ------------------------------------------------------------------------
+
+    /**
+     * Checks that the visit method has been called and that visitEnd has not
+     * been called.
+     */
     private void checkState() {
-        if (!this.start) {
-            throw new IllegalStateException("Cannot visit member before visit has been called.");
+        if (!start) {
+            throw new IllegalStateException(
+                    "Cannot visit member before visit has been called.");
         }
-        if (this.end) {
-            throw new IllegalStateException("Cannot visit member after visitEnd has been called.");
-        }
-    }
-    
-    static void checkAccess(final int n, final int n2) {
-        if ((n & ~n2) != 0x0) {
-            throw new IllegalArgumentException("Invalid access flags: " + n);
-        }
-        if (((((n & 0x1) != 0x0) + ((n & 0x2) != 0x0) + ((n & 0x4) != 0x0)) ? 1 : 0) > 1) {
-            throw new IllegalArgumentException("public private and protected are mutually exclusive: " + n);
-        }
-        if (((((n & 0x10) != 0x0) + ((n & 0x400) != 0x0)) ? 1 : 0) > 1) {
-            throw new IllegalArgumentException("final and abstract are mutually exclusive: " + n);
+        if (end) {
+            throw new IllegalStateException(
+                    "Cannot visit member after visitEnd has been called.");
         }
     }
-    
-    public static void checkClassSignature(final String s) {
-        int checkFormalTypeParameters = 0;
-        if (getChar(s, 0) == '<') {
-            checkFormalTypeParameters = checkFormalTypeParameters(s, checkFormalTypeParameters);
+
+    /**
+     * Checks that the given access flags do not contain invalid flags. This
+     * method also checks that mutually incompatible flags are not set
+     * simultaneously.
+     *
+     * @param access
+     *            the access flags to be checked
+     * @param possibleAccess
+     *            the valid access flags.
+     */
+    static void checkAccess(final int access, final int possibleAccess) {
+        if ((access & ~possibleAccess) != 0) {
+            throw new IllegalArgumentException("Invalid access flags: "
+                    + access);
         }
-        int n;
-        for (n = checkClassTypeSignature(s, checkFormalTypeParameters); getChar(s, n) == 'L'; n = checkClassTypeSignature(s, n)) {}
-        if (n != s.length()) {
-            throw new IllegalArgumentException(s + ": error at index " + n);
+        int pub = (access & Opcodes.ACC_PUBLIC) == 0 ? 0 : 1;
+        int pri = (access & Opcodes.ACC_PRIVATE) == 0 ? 0 : 1;
+        int pro = (access & Opcodes.ACC_PROTECTED) == 0 ? 0 : 1;
+        if (pub + pri + pro > 1) {
+            throw new IllegalArgumentException(
+                    "public private and protected are mutually exclusive: "
+                            + access);
+        }
+        int fin = (access & Opcodes.ACC_FINAL) == 0 ? 0 : 1;
+        int abs = (access & Opcodes.ACC_ABSTRACT) == 0 ? 0 : 1;
+        if (fin + abs > 1) {
+            throw new IllegalArgumentException(
+                    "final and abstract are mutually exclusive: " + access);
         }
     }
-    
-    public static void checkMethodSignature(final String s) {
-        int checkFormalTypeParameters = 0;
-        if (getChar(s, 0) == '<') {
-            checkFormalTypeParameters = checkFormalTypeParameters(s, checkFormalTypeParameters);
+
+    /**
+     * Checks a class signature.
+     *
+     * @param signature
+     *            a string containing the signature that must be checked.
+     */
+    public static void checkClassSignature(final String signature) {
+        // ClassSignature:
+        // FormalTypeParameters? ClassTypeSignature ClassTypeSignature*
+
+        int pos = 0;
+        if (getChar(signature, 0) == '<') {
+            pos = checkFormalTypeParameters(signature, pos);
         }
-        int n;
-        for (n = checkChar('(', s, checkFormalTypeParameters); "ZCBSIFJDL[T".indexOf(getChar(s, n)) != -1; n = checkTypeSignature(s, n)) {}
-        int n2 = checkChar(')', s, n);
-        if (getChar(s, n2) == 'V') {
-            ++n2;
+        pos = checkClassTypeSignature(signature, pos);
+        while (getChar(signature, pos) == 'L') {
+            pos = checkClassTypeSignature(signature, pos);
         }
-        else {
-            n2 = checkTypeSignature(s, n2);
+        if (pos != signature.length()) {
+            throw new IllegalArgumentException(signature + ": error at index "
+                    + pos);
         }
-        while (getChar(s, n2) == '^') {
-            ++n2;
-            if (getChar(s, n2) == 'L') {
-                n2 = checkClassTypeSignature(s, n2);
+    }
+
+    /**
+     * Checks a method signature.
+     *
+     * @param signature
+     *            a string containing the signature that must be checked.
+     */
+    public static void checkMethodSignature(final String signature) {
+        // MethodTypeSignature:
+        // FormalTypeParameters? ( TypeSignature* ) ( TypeSignature | V ) (
+        // ^ClassTypeSignature | ^TypeVariableSignature )*
+
+        int pos = 0;
+        if (getChar(signature, 0) == '<') {
+            pos = checkFormalTypeParameters(signature, pos);
+        }
+        pos = checkChar('(', signature, pos);
+        while ("ZCBSIFJDL[T".indexOf(getChar(signature, pos)) != -1) {
+            pos = checkTypeSignature(signature, pos);
+        }
+        pos = checkChar(')', signature, pos);
+        if (getChar(signature, pos) == 'V') {
+            ++pos;
+        } else {
+            pos = checkTypeSignature(signature, pos);
+        }
+        while (getChar(signature, pos) == '^') {
+            ++pos;
+            if (getChar(signature, pos) == 'L') {
+                pos = checkClassTypeSignature(signature, pos);
+            } else {
+                pos = checkTypeVariableSignature(signature, pos);
             }
-            else {
-                n2 = checkTypeVariableSignature(s, n2);
-            }
         }
-        if (n2 != s.length()) {
-            throw new IllegalArgumentException(s + ": error at index " + n2);
+        if (pos != signature.length()) {
+            throw new IllegalArgumentException(signature + ": error at index "
+                    + pos);
         }
     }
-    
-    public static void checkFieldSignature(final String s) {
-        final int checkFieldTypeSignature = checkFieldTypeSignature(s, 0);
-        if (checkFieldTypeSignature != s.length()) {
-            throw new IllegalArgumentException(s + ": error at index " + checkFieldTypeSignature);
+
+    /**
+     * Checks a field signature.
+     *
+     * @param signature
+     *            a string containing the signature that must be checked.
+     */
+    public static void checkFieldSignature(final String signature) {
+        int pos = checkFieldTypeSignature(signature, 0);
+        if (pos != signature.length()) {
+            throw new IllegalArgumentException(signature + ": error at index "
+                    + pos);
         }
     }
-    
-    static void checkTypeRefAndPath(final int n, final TypePath typePath) {
-        int n2 = 0;
-        switch (n >>> 24) {
-            case 0:
-            case 1:
-            case 22: {
-                n2 = -65536;
+
+    /**
+     * Checks the reference to a type in a type annotation.
+     *
+     * @param typeRef
+     *            a reference to an annotated type.
+     * @param typePath
+     *            the path to the annotated type argument, wildcard bound, array
+     *            element type, or static inner type within 'typeRef'. May be
+     *            <tt>null</tt> if the annotation targets 'typeRef' as a whole.
+     */
+    static void checkTypeRefAndPath(int typeRef, TypePath typePath) {
+        int mask = 0;
+        switch (typeRef >>> 24) {
+            case TypeReference.CLASS_TYPE_PARAMETER:
+            case TypeReference.METHOD_TYPE_PARAMETER:
+            case TypeReference.METHOD_FORMAL_PARAMETER:
+                mask = 0xFFFF0000;
                 break;
-            }
-            case 19:
-            case 20:
-            case 21:
-            case 64:
-            case 65:
-            case 67:
-            case 68:
-            case 69:
-            case 70: {
-                n2 = -16777216;
+            case TypeReference.FIELD:
+            case TypeReference.METHOD_RETURN:
+            case TypeReference.METHOD_RECEIVER:
+            case TypeReference.LOCAL_VARIABLE:
+            case TypeReference.RESOURCE_VARIABLE:
+            case TypeReference.INSTANCEOF:
+            case TypeReference.NEW:
+            case TypeReference.CONSTRUCTOR_REFERENCE:
+            case TypeReference.METHOD_REFERENCE:
+                mask = 0xFF000000;
                 break;
-            }
-            case 16:
-            case 17:
-            case 18:
-            case 23:
-            case 66: {
-                n2 = -256;
+            case TypeReference.CLASS_EXTENDS:
+            case TypeReference.CLASS_TYPE_PARAMETER_BOUND:
+            case TypeReference.METHOD_TYPE_PARAMETER_BOUND:
+            case TypeReference.THROWS:
+            case TypeReference.EXCEPTION_PARAMETER:
+                mask = 0xFFFFFF00;
                 break;
-            }
-            case 71:
-            case 72:
-            case 73:
-            case 74:
-            case 75: {
-                n2 = -16776961;
+            case TypeReference.CAST:
+            case TypeReference.CONSTRUCTOR_INVOCATION_TYPE_ARGUMENT:
+            case TypeReference.METHOD_INVOCATION_TYPE_ARGUMENT:
+            case TypeReference.CONSTRUCTOR_REFERENCE_TYPE_ARGUMENT:
+            case TypeReference.METHOD_REFERENCE_TYPE_ARGUMENT:
+                mask = 0xFF0000FF;
                 break;
-            }
-            default: {
-                throw new IllegalArgumentException("Invalid type reference sort 0x" + Integer.toHexString(n >>> 24));
-            }
+            default:
+                throw new IllegalArgumentException("Invalid type reference sort 0x"
+                        + Integer.toHexString(typeRef >>> 24));
         }
-        if ((n & ~n2) != 0x0) {
-            throw new IllegalArgumentException("Invalid type reference 0x" + Integer.toHexString(n));
+        if ((typeRef & ~mask) != 0) {
+            throw new IllegalArgumentException("Invalid type reference 0x"
+                    + Integer.toHexString(typeRef));
         }
         if (typePath != null) {
             for (int i = 0; i < typePath.getLength(); ++i) {
-                final int step = typePath.getStep(i);
-                if (step != 0 && step != 1 && step != 3 && step != 2) {
-                    throw new IllegalArgumentException("Invalid type path step " + i + " in " + typePath);
+                int step = typePath.getStep(i);
+                if (step != TypePath.ARRAY_ELEMENT
+                        && step != TypePath.INNER_TYPE
+                        && step != TypePath.TYPE_ARGUMENT
+                        && step != TypePath.WILDCARD_BOUND) {
+                    throw new IllegalArgumentException(
+                            "Invalid type path step " + i + " in " + typePath);
                 }
-                if (step != 3 && typePath.getStepArgument(i) != 0) {
-                    throw new IllegalArgumentException("Invalid type path step argument for step " + i + " in " + typePath);
+                if (step != TypePath.TYPE_ARGUMENT
+                        && typePath.getStepArgument(i) != 0) {
+                    throw new IllegalArgumentException(
+                            "Invalid type path step argument for step " + i
+                                    + " in " + typePath);
                 }
             }
         }
     }
-    
-    private static int checkFormalTypeParameters(final String s, int n) {
-        for (n = checkChar('<', s, n), n = checkFormalTypeParameter(s, n); getChar(s, n) != '>'; n = checkFormalTypeParameter(s, n)) {}
-        return n + 1;
-    }
-    
-    private static int checkFormalTypeParameter(final String s, int n) {
-        n = checkIdentifier(s, n);
-        n = checkChar(':', s, n);
-        if ("L[T".indexOf(getChar(s, n)) != -1) {
-            n = checkFieldTypeSignature(s, n);
+
+    /**
+     * Checks the formal type parameters of a class or method signature.
+     *
+     * @param signature
+     *            a string containing the signature that must be checked.
+     * @param pos
+     *            index of first character to be checked.
+     * @return the index of the first character after the checked part.
+     */
+    private static int checkFormalTypeParameters(final String signature, int pos) {
+        // FormalTypeParameters:
+        // < FormalTypeParameter+ >
+
+        pos = checkChar('<', signature, pos);
+        pos = checkFormalTypeParameter(signature, pos);
+        while (getChar(signature, pos) != '>') {
+            pos = checkFormalTypeParameter(signature, pos);
         }
-        while (getChar(s, n) == ':') {
-            n = checkFieldTypeSignature(s, n + 1);
-        }
-        return n;
+        return pos + 1;
     }
-    
-    private static int checkFieldTypeSignature(final String s, final int n) {
-        switch (getChar(s, n)) {
-            case 'L': {
-                return checkClassTypeSignature(s, n);
+
+    /**
+     * Checks a formal type parameter of a class or method signature.
+     *
+     * @param signature
+     *            a string containing the signature that must be checked.
+     * @param pos
+     *            index of first character to be checked.
+     * @return the index of the first character after the checked part.
+     */
+    private static int checkFormalTypeParameter(final String signature, int pos) {
+        // FormalTypeParameter:
+        // Identifier : FieldTypeSignature? (: FieldTypeSignature)*
+
+        pos = checkIdentifier(signature, pos);
+        pos = checkChar(':', signature, pos);
+        if ("L[T".indexOf(getChar(signature, pos)) != -1) {
+            pos = checkFieldTypeSignature(signature, pos);
+        }
+        while (getChar(signature, pos) == ':') {
+            pos = checkFieldTypeSignature(signature, pos + 1);
+        }
+        return pos;
+    }
+
+    /**
+     * Checks a field type signature.
+     *
+     * @param signature
+     *            a string containing the signature that must be checked.
+     * @param pos
+     *            index of first character to be checked.
+     * @return the index of the first character after the checked part.
+     */
+    private static int checkFieldTypeSignature(final String signature, int pos) {
+        // FieldTypeSignature:
+        // ClassTypeSignature | ArrayTypeSignature | TypeVariableSignature
+        //
+        // ArrayTypeSignature:
+        // [ TypeSignature
+
+        switch (getChar(signature, pos)) {
+            case 'L':
+                return checkClassTypeSignature(signature, pos);
+            case '[':
+                return checkTypeSignature(signature, pos + 1);
+            default:
+                return checkTypeVariableSignature(signature, pos);
+        }
+    }
+
+    /**
+     * Checks a class type signature.
+     *
+     * @param signature
+     *            a string containing the signature that must be checked.
+     * @param pos
+     *            index of first character to be checked.
+     * @return the index of the first character after the checked part.
+     */
+    private static int checkClassTypeSignature(final String signature, int pos) {
+        // ClassTypeSignature:
+        // L Identifier ( / Identifier )* TypeArguments? ( . Identifier
+        // TypeArguments? )* ;
+
+        pos = checkChar('L', signature, pos);
+        pos = checkIdentifier(signature, pos);
+        while (getChar(signature, pos) == '/') {
+            pos = checkIdentifier(signature, pos + 1);
+        }
+        if (getChar(signature, pos) == '<') {
+            pos = checkTypeArguments(signature, pos);
+        }
+        while (getChar(signature, pos) == '.') {
+            pos = checkIdentifier(signature, pos + 1);
+            if (getChar(signature, pos) == '<') {
+                pos = checkTypeArguments(signature, pos);
             }
-            case '[': {
-                return checkTypeSignature(s, n + 1);
-            }
-            default: {
-                return checkTypeVariableSignature(s, n);
-            }
         }
+        return checkChar(';', signature, pos);
     }
-    
-    private static int checkClassTypeSignature(final String s, int n) {
-        for (n = checkChar('L', s, n), n = checkIdentifier(s, n); getChar(s, n) == '/'; n = checkIdentifier(s, n + 1)) {}
-        if (getChar(s, n) == '<') {
-            n = checkTypeArguments(s, n);
+
+    /**
+     * Checks the type arguments in a class type signature.
+     *
+     * @param signature
+     *            a string containing the signature that must be checked.
+     * @param pos
+     *            index of first character to be checked.
+     * @return the index of the first character after the checked part.
+     */
+    private static int checkTypeArguments(final String signature, int pos) {
+        // TypeArguments:
+        // < TypeArgument+ >
+
+        pos = checkChar('<', signature, pos);
+        pos = checkTypeArgument(signature, pos);
+        while (getChar(signature, pos) != '>') {
+            pos = checkTypeArgument(signature, pos);
         }
-        while (getChar(s, n) == '.') {
-            n = checkIdentifier(s, n + 1);
-            if (getChar(s, n) == '<') {
-                n = checkTypeArguments(s, n);
-            }
+        return pos + 1;
+    }
+
+    /**
+     * Checks a type argument in a class type signature.
+     *
+     * @param signature
+     *            a string containing the signature that must be checked.
+     * @param pos
+     *            index of first character to be checked.
+     * @return the index of the first character after the checked part.
+     */
+    private static int checkTypeArgument(final String signature, int pos) {
+        // TypeArgument:
+        // * | ( ( + | - )? FieldTypeSignature )
+
+        char c = getChar(signature, pos);
+        if (c == '*') {
+            return pos + 1;
+        } else if (c == '+' || c == '-') {
+            pos++;
         }
-        return checkChar(';', s, n);
+        return checkFieldTypeSignature(signature, pos);
     }
-    
-    private static int checkTypeArguments(final String s, int n) {
-        for (n = checkChar('<', s, n), n = checkTypeArgument(s, n); getChar(s, n) != '>'; n = checkTypeArgument(s, n)) {}
-        return n + 1;
+
+    /**
+     * Checks a type variable signature.
+     *
+     * @param signature
+     *            a string containing the signature that must be checked.
+     * @param pos
+     *            index of first character to be checked.
+     * @return the index of the first character after the checked part.
+     */
+    private static int checkTypeVariableSignature(final String signature,
+                                                  int pos) {
+        // TypeVariableSignature:
+        // T Identifier ;
+
+        pos = checkChar('T', signature, pos);
+        pos = checkIdentifier(signature, pos);
+        return checkChar(';', signature, pos);
     }
-    
-    private static int checkTypeArgument(final String s, int n) {
-        final char char1 = getChar(s, n);
-        if (char1 == '*') {
-            return n + 1;
-        }
-        if (char1 == '+' || char1 == '-') {
-            ++n;
-        }
-        return checkFieldTypeSignature(s, n);
-    }
-    
-    private static int checkTypeVariableSignature(final String s, int n) {
-        n = checkChar('T', s, n);
-        n = checkIdentifier(s, n);
-        return checkChar(';', s, n);
-    }
-    
-    private static int checkTypeSignature(final String s, final int n) {
-        switch (getChar(s, n)) {
-            case 'B':
+
+    /**
+     * Checks a type signature.
+     *
+     * @param signature
+     *            a string containing the signature that must be checked.
+     * @param pos
+     *            index of first character to be checked.
+     * @return the index of the first character after the checked part.
+     */
+    private static int checkTypeSignature(final String signature, int pos) {
+        // TypeSignature:
+        // Z | C | B | S | I | F | J | D | FieldTypeSignature
+
+        switch (getChar(signature, pos)) {
+            case 'Z':
             case 'C':
-            case 'D':
-            case 'F':
-            case 'I':
-            case 'J':
+            case 'B':
             case 'S':
-            case 'Z': {
-                return n + 1;
-            }
-            default: {
-                return checkFieldTypeSignature(s, n);
-            }
+            case 'I':
+            case 'F':
+            case 'J':
+            case 'D':
+                return pos + 1;
+            default:
+                return checkFieldTypeSignature(signature, pos);
         }
     }
-    
-    private static int checkIdentifier(final String s, int n) {
-        if (!Character.isJavaIdentifierStart(getChar(s, n))) {
-            throw new IllegalArgumentException(s + ": identifier expected at index " + n);
+
+    /**
+     * Checks an identifier.
+     *
+     * @param signature
+     *            a string containing the signature that must be checked.
+     * @param pos
+     *            index of first character to be checked.
+     * @return the index of the first character after the checked part.
+     */
+    private static int checkIdentifier(final String signature, int pos) {
+        if (!Character.isJavaIdentifierStart(getChar(signature, pos))) {
+            throw new IllegalArgumentException(signature
+                    + ": identifier expected at index " + pos);
         }
-        ++n;
-        while (Character.isJavaIdentifierPart(getChar(s, n))) {
-            ++n;
+        ++pos;
+        while (Character.isJavaIdentifierPart(getChar(signature, pos))) {
+            ++pos;
         }
-        return n;
+        return pos;
     }
-    
-    private static int checkChar(final char c, final String s, final int n) {
-        if (getChar(s, n) == c) {
-            return n + 1;
+
+    /**
+     * Checks a single character.
+     *
+     * @param signature
+     *            a string containing the signature that must be checked.
+     * @param pos
+     *            index of first character to be checked.
+     * @return the index of the first character after the checked part.
+     */
+    private static int checkChar(final char c, final String signature, int pos) {
+        if (getChar(signature, pos) == c) {
+            return pos + 1;
         }
-        throw new IllegalArgumentException(s + ": '" + c + "' expected at index " + n);
+        throw new IllegalArgumentException(signature + ": '" + c
+                + "' expected at index " + pos);
     }
-    
-    private static char getChar(final String s, final int n) {
-        return (n < s.length()) ? s.charAt(n) : '\0';
-    }
-    
-    static /* synthetic */ Class class$(final String s) {
-        try {
-            return Class.forName(s);
-        }
-        catch (ClassNotFoundException ex) {
-            throw new NoClassDefFoundError(ex.getMessage());
-        }
-    }
-    
-    static {
-        CheckClassAdapter.class$org$objectweb$asm$util$CheckClassAdapter = class$("com.newrelic.agent.deps.org.objectweb.asm.util.CheckClassAdapter");
+
+    /**
+     * Returns the signature car at the given index.
+     *
+     * @param signature
+     *            a signature.
+     * @param pos
+     *            an index in signature.
+     * @return the character at the given index, or 0 if there is no such
+     *         character.
+     */
+    private static char getChar(final String signature, int pos) {
+        return pos < signature.length() ? signature.charAt(pos) : (char) 0;
     }
 }

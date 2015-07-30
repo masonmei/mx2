@@ -4,8 +4,8 @@
 
 package com.newrelic.agent.attributes;
 
-import java.util.Iterator;
 import com.newrelic.agent.deps.com.google.common.collect.Maps;
+
 import java.util.Collections;
 import java.util.Map;
 
@@ -15,7 +15,7 @@ public class AttributesUtils
         if (input == null || input.isEmpty()) {
             return Collections.emptyMap();
         }
-        final Map<String, String> toReturn = (Map<String, String>)Maps.newHashMap();
+        final Map<String, String> toReturn = Maps.newHashMap();
         for (final Map.Entry<String, Map<String, String>> current : input.entrySet()) {
             final String prefix = current.getKey();
             final Map<String, String> attributes = current.getValue();

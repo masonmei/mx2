@@ -30,7 +30,7 @@ public class DefaultApiImplementations
     }
     
     public DefaultApiImplementations(final Class<?>... defaultImplementations) throws Exception {
-        final Map<String, Map<Method, MethodNode>> interfaceToMethods = (Map<String, Map<Method, MethodNode>>)Maps.newHashMap();
+        final Map<String, Map<Method, MethodNode>> interfaceToMethods = Maps.newHashMap();
         for (final Class<?> clazz : defaultImplementations) {
             if (Modifier.isAbstract(clazz.getModifiers())) {
                 throw new Exception(clazz.getName() + " cannot be abstract");
@@ -40,7 +40,7 @@ public class DefaultApiImplementations
             if (interfaces.length != 1) {
                 throw new Exception(clazz.getName() + " implements multiple interfaces: " + Arrays.asList(interfaces));
             }
-            final Map<Method, MethodNode> methods = (Map<Method, MethodNode>)Maps.newHashMap();
+            final Map<Method, MethodNode> methods = Maps.newHashMap();
             interfaceToMethods.put(interfaces[0], methods);
             final ClassVisitor cv = new ClassVisitor(327680) {
                 public MethodVisitor visitMethod(final int access, final String name, final String desc, final String signature, final String[] exceptions) {
@@ -58,7 +58,7 @@ public class DefaultApiImplementations
             methods.remove(new Method("<init>", "()V"));
             methods.remove(new Method("<cinit>", "()V"));
         }
-        this.interfaceToMethods = (Map<String, Map<Method, MethodNode>>)ImmutableMap.copyOf((Map<?, ?>)interfaceToMethods);
+        this.interfaceToMethods = ImmutableMap.copyOf(interfaceToMethods);
     }
     
     public Map<String, Map<Method, MethodNode>> getApiClassNameToDefaultMethods() {

@@ -26,8 +26,8 @@ public class ProfileTree implements JSONStreamAware
     private long cpuTime;
     
     public ProfileTree() {
-        this.rootSegments = (Map<ProfiledMethod, ProfileSegment>)Maps.newIdentityHashMap();
-        this.profiledMethods = (Map<StackTraceElement, ProfiledMethod>)Maps.newHashMap();
+        this.rootSegments = Maps.newIdentityHashMap();
+        this.profiledMethods = Maps.newHashMap();
     }
     
     private ProfileSegment add(final StackTraceElement stackTraceElement, final ProfileSegment parent, final boolean runnable) {

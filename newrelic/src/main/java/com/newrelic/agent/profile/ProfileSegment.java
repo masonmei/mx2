@@ -28,7 +28,7 @@ public class ProfileSegment implements JSONStreamAware
     private ProfileSegment(final ProfiledMethod method) {
         this.runnableCallCount = 0;
         this.nonrunnableCallCount = 0;
-        this.children = (Map<ProfiledMethod, ProfileSegment>)Maps.newIdentityHashMap();
+        this.children = Maps.newIdentityHashMap();
         this.method = method;
     }
     

@@ -32,12 +32,12 @@ public abstract class Equivalence<T>
     }
     
     public final <S extends T> Wrapper<S> wrap(@Nullable final S reference) {
-        return new Wrapper<S>(this, (Object)reference);
+        return new Wrapper<S>(this, (S) reference);
     }
     
     @GwtCompatible(serializable = true)
     public final <S extends T> Equivalence<Iterable<S>> pairwise() {
-        return (Equivalence<Iterable<S>>)new PairwiseEquivalence((Equivalence<? super Object>)this);
+        return (Equivalence<Iterable<S>>)new PairwiseEquivalence(this);
     }
     
     @Beta
@@ -87,7 +87,7 @@ public abstract class Equivalence<T>
         
         @Override
         public int hashCode() {
-            return this.equivalence.hash((Object)this.reference);
+            return this.equivalence.hash(this.reference);
         }
         
         @Override

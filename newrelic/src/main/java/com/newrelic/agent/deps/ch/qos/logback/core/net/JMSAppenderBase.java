@@ -46,22 +46,20 @@ public abstract class JMSAppenderBase<E> extends AppenderBase<E>
     
     public Properties buildEnvProperties() {
         final Properties env = new Properties();
-        ((Hashtable<String, String>)env).put("java.naming.factory.initial", this.initialContextFactoryName);
+        env.put("java.naming.factory.initial", this.initialContextFactoryName);
         if (this.providerURL != null) {
-            ((Hashtable<String, String>)env).put("java.naming.provider.url", this.providerURL);
-        }
-        else {
+            env.put("java.naming.provider.url", this.providerURL);
+        } else {
             this.addWarn("You have set InitialContextFactoryName option but not the ProviderURL. This is likely to cause problems.");
         }
         if (this.urlPkgPrefixes != null) {
-            ((Hashtable<String, String>)env).put("java.naming.factory.url.pkgs", this.urlPkgPrefixes);
+            env.put("java.naming.factory.url.pkgs", this.urlPkgPrefixes);
         }
         if (this.securityPrincipalName != null) {
-            ((Hashtable<String, String>)env).put("java.naming.security.principal", this.securityPrincipalName);
+            env.put("java.naming.security.principal", this.securityPrincipalName);
             if (this.securityCredentials != null) {
-                ((Hashtable<String, String>)env).put("java.naming.security.credentials", this.securityCredentials);
-            }
-            else {
+                env.put("java.naming.security.credentials", this.securityCredentials);
+            } else {
                 this.addWarn("You have set SecurityPrincipalName option but not the SecurityCredentials. This is likely to cause problems.");
             }
         }

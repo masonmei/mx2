@@ -55,7 +55,7 @@ public class PatternLayout extends PatternLayoutBase<ILoggingEvent>
     public static final String HEADER_PREFIX = "#logback.classic pattern: ";
     
     public PatternLayout() {
-        this.postCompileProcessor = (PostCompileProcessor<E>)new EnsureExceptionHandling();
+        this.postCompileProcessor = new EnsureExceptionHandling();
     }
     
     public Map<String, String> getDefaultConverterMap() {

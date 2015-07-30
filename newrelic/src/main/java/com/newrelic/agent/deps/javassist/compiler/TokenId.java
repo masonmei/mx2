@@ -1,99 +1,125 @@
-// 
-// Decompiled by Procyon v0.5.29
-// 
+/*
+ * Javassist, a Java-bytecode translator toolkit.
+ * Copyright (C) 1999- Shigeru Chiba. All Rights Reserved.
+ *
+ * The contents of this file are subject to the Mozilla Public License Version
+ * 1.1 (the "License"); you may not use this file except in compliance with
+ * the License.  Alternatively, the contents of this file may be used under
+ * the terms of the GNU Lesser General Public License Version 2.1 or later,
+ * or the Apache License Version 2.0.
+ *
+ * Software distributed under the License is distributed on an "AS IS" basis,
+ * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
+ * for the specific language governing rights and limitations under the
+ * License.
+ */
 
 package com.newrelic.agent.deps.javassist.compiler;
 
-public interface TokenId
-{
-    public static final int ABSTRACT = 300;
-    public static final int BOOLEAN = 301;
-    public static final int BREAK = 302;
-    public static final int BYTE = 303;
-    public static final int CASE = 304;
-    public static final int CATCH = 305;
-    public static final int CHAR = 306;
-    public static final int CLASS = 307;
-    public static final int CONST = 308;
-    public static final int CONTINUE = 309;
-    public static final int DEFAULT = 310;
-    public static final int DO = 311;
-    public static final int DOUBLE = 312;
-    public static final int ELSE = 313;
-    public static final int EXTENDS = 314;
-    public static final int FINAL = 315;
-    public static final int FINALLY = 316;
-    public static final int FLOAT = 317;
-    public static final int FOR = 318;
-    public static final int GOTO = 319;
-    public static final int IF = 320;
-    public static final int IMPLEMENTS = 321;
-    public static final int IMPORT = 322;
-    public static final int INSTANCEOF = 323;
-    public static final int INT = 324;
-    public static final int INTERFACE = 325;
-    public static final int LONG = 326;
-    public static final int NATIVE = 327;
-    public static final int NEW = 328;
-    public static final int PACKAGE = 329;
-    public static final int PRIVATE = 330;
-    public static final int PROTECTED = 331;
-    public static final int PUBLIC = 332;
-    public static final int RETURN = 333;
-    public static final int SHORT = 334;
-    public static final int STATIC = 335;
-    public static final int SUPER = 336;
-    public static final int SWITCH = 337;
-    public static final int SYNCHRONIZED = 338;
-    public static final int THIS = 339;
-    public static final int THROW = 340;
-    public static final int THROWS = 341;
-    public static final int TRANSIENT = 342;
-    public static final int TRY = 343;
-    public static final int VOID = 344;
-    public static final int VOLATILE = 345;
-    public static final int WHILE = 346;
-    public static final int STRICT = 347;
-    public static final int NEQ = 350;
-    public static final int MOD_E = 351;
-    public static final int AND_E = 352;
-    public static final int MUL_E = 353;
-    public static final int PLUS_E = 354;
-    public static final int MINUS_E = 355;
-    public static final int DIV_E = 356;
-    public static final int LE = 357;
-    public static final int EQ = 358;
-    public static final int GE = 359;
-    public static final int EXOR_E = 360;
-    public static final int OR_E = 361;
-    public static final int PLUSPLUS = 362;
-    public static final int MINUSMINUS = 363;
-    public static final int LSHIFT = 364;
-    public static final int LSHIFT_E = 365;
-    public static final int RSHIFT = 366;
-    public static final int RSHIFT_E = 367;
-    public static final int OROR = 368;
-    public static final int ANDAND = 369;
-    public static final int ARSHIFT = 370;
-    public static final int ARSHIFT_E = 371;
-    public static final String[] opNames = { "!=", "%=", "&=", "*=", "+=", "-=", "/=", "<=", "==", ">=", "^=", "|=", "++", "--", "<<", "<<=", ">>", ">>=", "||", "&&", ">>>", ">>>=" };
-    public static final int[] assignOps = { 37, 38, 42, 43, 45, 47, 0, 0, 0, 94, 124, 0, 0, 0, 364, 0, 366, 0, 0, 0, 370 };
-    public static final int Identifier = 400;
-    public static final int CharConstant = 401;
-    public static final int IntConstant = 402;
-    public static final int LongConstant = 403;
-    public static final int FloatConstant = 404;
-    public static final int DoubleConstant = 405;
-    public static final int StringL = 406;
-    public static final int TRUE = 410;
-    public static final int FALSE = 411;
-    public static final int NULL = 412;
-    public static final int CALL = 67;
-    public static final int ARRAY = 65;
-    public static final int MEMBER = 35;
-    public static final int EXPR = 69;
-    public static final int LABEL = 76;
-    public static final int BLOCK = 66;
-    public static final int DECL = 68;
-    public static final int BadToken = 500;
+public interface TokenId {
+    int ABSTRACT = 300;
+    int BOOLEAN = 301;
+    int BREAK = 302;
+    int BYTE = 303;
+    int CASE = 304;
+    int CATCH = 305;
+    int CHAR = 306;
+    int CLASS = 307;
+    int CONST = 308;    // reserved keyword
+    int CONTINUE = 309;
+    int DEFAULT = 310;
+    int DO = 311;
+    int DOUBLE = 312;
+    int ELSE = 313;
+    int EXTENDS = 314;
+    int FINAL = 315;
+    int FINALLY = 316;
+    int FLOAT = 317;
+    int FOR = 318;
+    int GOTO = 319;     // reserved keyword
+    int IF = 320;
+    int IMPLEMENTS = 321;
+    int IMPORT = 322;
+    int INSTANCEOF = 323;
+    int INT = 324;
+    int INTERFACE = 325;
+    int LONG = 326;
+    int NATIVE = 327;
+    int NEW = 328;
+    int PACKAGE = 329;
+    int PRIVATE = 330;
+    int PROTECTED = 331;
+    int PUBLIC = 332;
+    int RETURN = 333;
+    int SHORT = 334;
+    int STATIC = 335;
+    int SUPER = 336;
+    int SWITCH = 337;
+    int SYNCHRONIZED = 338;
+    int THIS = 339;
+    int THROW = 340;
+    int THROWS = 341;
+    int TRANSIENT = 342;
+    int TRY = 343;
+    int VOID = 344;
+    int VOLATILE = 345;
+    int WHILE = 346;
+    int STRICT = 347;
+
+    int NEQ = 350;      // !=
+    int MOD_E = 351;    // %=
+    int AND_E = 352;    // &=
+    int MUL_E = 353;    // *=
+    int PLUS_E = 354;   // +=
+    int MINUS_E = 355;  // -=
+    int DIV_E = 356;    // /=
+    int LE = 357;               // <=
+    int EQ = 358;               // ==
+    int GE = 359;               // >=
+    int EXOR_E = 360;   // ^=
+    int OR_E = 361;     // |=
+    int PLUSPLUS = 362; // ++
+    int MINUSMINUS = 363;       // --
+    int LSHIFT = 364;   // <<
+    int LSHIFT_E = 365; // <<=
+    int RSHIFT = 366;   // >>
+    int RSHIFT_E = 367; // >>=
+    int OROR = 368;     // ||
+    int ANDAND = 369;   // &&
+    int ARSHIFT = 370;  // >>>
+    int ARSHIFT_E = 371;        // >>>=
+
+    // operators from NEQ to ARSHIFT_E
+    String opNames[] = { "!=", "%=", "&=", "*=", "+=", "-=", "/=",
+            "<=", "==", ">=", "^=", "|=", "++", "--",
+            "<<", "<<=", ">>", ">>=", "||", "&&", ">>>",
+            ">>>=" };
+
+    // operators from MOD_E to ARSHIFT_E
+    int assignOps[] = { '%', '&', '*', '+', '-', '/', 0, 0, 0,
+            '^', '|', 0, 0, 0, LSHIFT, 0, RSHIFT, 0, 0, 0,
+            ARSHIFT };
+
+    int Identifier = 400;
+    int CharConstant = 401;
+    int IntConstant = 402;
+    int LongConstant = 403;
+    int FloatConstant = 404;
+    int DoubleConstant = 405;
+    int StringL = 406;
+
+    int TRUE = 410;
+    int FALSE = 411;
+    int NULL = 412;
+
+    int CALL = 'C';     // method call
+    int ARRAY = 'A';    // array access
+    int MEMBER = '#';   // static member access
+
+    int EXPR = 'E';     // expression statement
+    int LABEL = 'L';    // label statement
+    int BLOCK = 'B';    // block statement
+    int DECL = 'D';     // declaration statement
+
+    int BadToken = 500;
 }

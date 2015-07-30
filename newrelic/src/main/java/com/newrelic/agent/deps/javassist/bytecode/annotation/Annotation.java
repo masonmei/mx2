@@ -1,204 +1,348 @@
-// 
-// Decompiled by Procyon v0.5.29
-// 
+/*
+ * Javassist, a Java-bytecode translator toolkit.
+ * Copyright (C) 2004 Bill Burke. All Rights Reserved.
+ *
+ * The contents of this file are subject to the Mozilla Public License Version
+ * 1.1 (the "License"); you may not use this file except in compliance with
+ * the License.  Alternatively, the contents of this file may be used under
+ * the terms of the GNU Lesser General Public License Version 2.1 or later,
+ * or the Apache License Version 2.0.
+ *
+ * Software distributed under the License is distributed on an "AS IS" basis,
+ * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
+ * for the specific language governing rights and limitations under the
+ * License.
+ */
 
 package com.newrelic.agent.deps.javassist.bytecode.annotation;
 
-import java.io.IOException;
+import com.newrelic.agent.deps.javassist.bytecode.ConstPool;
+import com.newrelic.agent.deps.javassist.bytecode.Descriptor;
 import com.newrelic.agent.deps.javassist.ClassPool;
+import com.newrelic.agent.deps.javassist.CtClass;
+import com.newrelic.agent.deps.javassist.CtMethod;
+import com.newrelic.agent.deps.javassist.NotFoundException;
+
+import java.io.IOException;
+import java.util.LinkedHashMap;
 import java.util.Set;
 import java.util.Iterator;
-import com.newrelic.agent.deps.javassist.NotFoundException;
-import com.newrelic.agent.deps.javassist.CtMethod;
-import com.newrelic.agent.deps.javassist.CtClass;
-import com.newrelic.agent.deps.javassist.bytecode.Descriptor;
-import java.util.LinkedHashMap;
-import com.newrelic.agent.deps.javassist.bytecode.ConstPool;
 
-public class Annotation
-{
+/**
+ * The <code>annotation</code> structure.
+ *
+ * <p>An instance of this class is returned by
+ * <code>getAnnotations()</code> in <code>AnnotationsAttribute</code>
+ * or in <code>ParameterAnnotationsAttribute</code>.
+ *
+ * @see com.newrelic.agent.deps.javassist.bytecode.AnnotationsAttribute#getAnnotations()
+ * @see com.newrelic.agent.deps.javassist.bytecode.ParameterAnnotationsAttribute#getAnnotations()
+ * @see MemberValue
+ * @see MemberValueVisitor
+ * @see AnnotationsWriter
+ *
+ * @author <a href="mailto:bill@jboss.org">Bill Burke</a>
+ * @author Shigeru Chiba
+ * @author <a href="mailto:adrian@jboss.org">Adrian Brock</a>
+ */
+public class Annotation {
+    static class Pair {
+        int name;
+        MemberValue value;
+    }
+
     ConstPool pool;
     int typeIndex;
-    LinkedHashMap members;
-    
-    public Annotation(final int type, final ConstPool cp) {
-        this.pool = cp;
-        this.typeIndex = type;
-        this.members = null;
+    LinkedHashMap members;    // this sould be LinkedHashMap
+    // but it is not supported by JDK 1.3.
+
+    /**
+     * Constructs an annotation including no members.  A member can be
+     * later added to the created annotation by <code>addMemberValue()</code>. 
+     *
+     * @param type  the index into the constant pool table.
+     *              the entry at that index must be the
+     *              <code>CONSTANT_Utf8_Info</code> structure
+     *              repreenting the name of the annotation interface type.
+     * @param cp    the constant pool table.
+     *
+     * @see #addMemberValue(String, MemberValue)
+     */
+    public Annotation(int type, ConstPool cp) {
+        pool = cp;
+        typeIndex = type;
+        members = null;
     }
-    
-    public Annotation(final String typeName, final ConstPool cp) {
+
+    /**
+     * Constructs an annotation including no members.  A member can be
+     * later added to the created annotation by <code>addMemberValue()</code>. 
+     *
+     * @param typeName  the name of the annotation interface type.
+     * @param cp        the constant pool table.
+     *
+     * @see #addMemberValue(String, MemberValue)
+     */
+    public Annotation(String typeName, ConstPool cp) {
         this(cp.addUtf8Info(Descriptor.of(typeName)), cp);
     }
-    
-    public Annotation(final ConstPool cp, final CtClass clazz) throws NotFoundException {
+
+    /**
+     * Constructs an annotation that can be accessed through the interface
+     * represented by <code>clazz</code>.  The values of the members are
+     * not specified.
+     *
+     * @param cp        the constant pool table.
+     * @param clazz     the interface.
+     * @throws NotFoundException when the clazz is not found 
+     */
+    public Annotation(ConstPool cp, CtClass clazz)
+            throws NotFoundException
+    {
+        // todo Enums are not supported right now.
         this(cp.addUtf8Info(Descriptor.of(clazz.getName())), cp);
-        if (!clazz.isInterface()) {
-            throw new RuntimeException("Only interfaces are allowed for Annotation creation.");
-        }
-        final CtMethod[] methods = clazz.getDeclaredMethods();
+
+        if (!clazz.isInterface())
+            throw new RuntimeException(
+                    "Only interfaces are allowed for Annotation creation.");
+
+        CtMethod methods[] = clazz.getDeclaredMethods();
         if (methods.length > 0) {
-            this.members = new LinkedHashMap();
+            members = new LinkedHashMap();
         }
-        for (int i = 0; i < methods.length; ++i) {
-            final CtClass returnType = methods[i].getReturnType();
-            this.addMemberValue(methods[i].getName(), createMemberValue(cp, returnType));
+
+        for (int i = 0; i < methods.length; i++) {
+            CtClass returnType = methods[i].getReturnType();
+            addMemberValue(methods[i].getName(),
+                    createMemberValue(cp, returnType));
+
         }
     }
-    
-    public static MemberValue createMemberValue(final ConstPool cp, final CtClass type) throws NotFoundException {
-        if (type == CtClass.booleanType) {
+
+    /**
+     * Makes an instance of <code>MemberValue</code>.
+     *
+     * @param cp            the constant pool table.
+     * @param type          the type of the member.
+     * @return the member value
+     * @throws NotFoundException when the type is not found
+     */
+    public static MemberValue createMemberValue(ConstPool cp, CtClass type)
+            throws NotFoundException
+    {
+        if (type == CtClass.booleanType)
             return new BooleanMemberValue(cp);
-        }
-        if (type == CtClass.byteType) {
+        else if (type == CtClass.byteType)
             return new ByteMemberValue(cp);
-        }
-        if (type == CtClass.charType) {
-            return new CharMemberValue(cp);
-        }
-        if (type == CtClass.shortType) {
-            return new ShortMemberValue(cp);
-        }
-        if (type == CtClass.intType) {
-            return new IntegerMemberValue(cp);
-        }
-        if (type == CtClass.longType) {
-            return new LongMemberValue(cp);
-        }
-        if (type == CtClass.floatType) {
-            return new FloatMemberValue(cp);
-        }
-        if (type == CtClass.doubleType) {
-            return new DoubleMemberValue(cp);
-        }
-        if (type.getName().equals("java.lang.Class")) {
-            return new ClassMemberValue(cp);
-        }
-        if (type.getName().equals("java.lang.String")) {
-            return new StringMemberValue(cp);
-        }
-        if (type.isArray()) {
-            final CtClass arrayType = type.getComponentType();
-            final MemberValue member = createMemberValue(cp, arrayType);
-            return new ArrayMemberValue(member, cp);
-        }
-        if (type.isInterface()) {
-            final Annotation info = new Annotation(cp, type);
-            return new AnnotationMemberValue(info, cp);
-        }
-        final EnumMemberValue emv = new EnumMemberValue(cp);
-        emv.setType(type.getName());
-        return emv;
+        else if (type == CtClass.charType)
+                return new CharMemberValue(cp);
+            else if (type == CtClass.shortType)
+                    return new ShortMemberValue(cp);
+                else if (type == CtClass.intType)
+                        return new IntegerMemberValue(cp);
+                    else if (type == CtClass.longType)
+                            return new LongMemberValue(cp);
+                        else if (type == CtClass.floatType)
+                                return new FloatMemberValue(cp);
+                            else if (type == CtClass.doubleType)
+                                    return new DoubleMemberValue(cp);
+                                else if (type.getName().equals("java.lang.Class"))
+                                        return new ClassMemberValue(cp);
+                                    else if (type.getName().equals("java.lang.String"))
+                                            return new StringMemberValue(cp);
+                                        else if (type.isArray()) {
+                                                CtClass arrayType = type.getComponentType();
+                                                MemberValue member = createMemberValue(cp, arrayType);
+                                                return new ArrayMemberValue(member, cp);
+                                            }
+                                            else if (type.isInterface()) {
+                                                    Annotation info = new Annotation(cp, type);
+                                                    return new AnnotationMemberValue(info, cp);
+                                                }
+                                                else {
+                                                    // treat as enum.  I know this is not typed,
+                                                    // but JBoss has an Annotation Compiler for JDK 1.4
+                                                    // and I want it to work with that. - Bill Burke
+                                                    EnumMemberValue emv = new EnumMemberValue(cp);
+                                                    emv.setType(type.getName());
+                                                    return emv;
+                                                }
     }
-    
-    public void addMemberValue(final int nameIndex, final MemberValue value) {
-        final Pair p = new Pair();
+
+    /**
+     * Adds a new member.
+     *
+     * @param nameIndex     the index into the constant pool table.
+     *                      The entry at that index must be
+     *                      a <code>CONSTANT_Utf8_info</code> structure.
+     *                      structure representing the member name.
+     * @param value         the member value.
+     */
+    public void addMemberValue(int nameIndex, MemberValue value) {
+        Pair p = new Pair();
         p.name = nameIndex;
         p.value = value;
-        this.addMemberValue(p);
+        addMemberValue(p);
     }
-    
-    public void addMemberValue(final String name, final MemberValue value) {
-        final Pair p = new Pair();
-        p.name = this.pool.addUtf8Info(name);
+
+    /**
+     * Adds a new member.
+     *
+     * @param name      the member name.
+     * @param value     the member value.
+     */
+    public void addMemberValue(String name, MemberValue value) {
+        Pair p = new Pair();
+        p.name = pool.addUtf8Info(name);
         p.value = value;
-        if (this.members == null) {
-            this.members = new LinkedHashMap();
-        }
-        this.members.put(name, p);
+        if (members == null)
+            members = new LinkedHashMap();
+
+        members.put(name, p);
     }
-    
-    private void addMemberValue(final Pair pair) {
-        final String name = this.pool.getUtf8Info(pair.name);
-        if (this.members == null) {
-            this.members = new LinkedHashMap();
-        }
-        this.members.put(name, pair);
+
+    private void addMemberValue(Pair pair) {
+        String name = pool.getUtf8Info(pair.name);
+        if (members == null)
+            members = new LinkedHashMap();
+
+        members.put(name, pair);
     }
-    
-    @Override
+
+    /**
+     * Returns a string representation of the annotation.
+     */
     public String toString() {
-        final StringBuffer buf = new StringBuffer("@");
-        buf.append(this.getTypeName());
-        if (this.members != null) {
+        StringBuffer buf = new StringBuffer("@");
+        buf.append(getTypeName());
+        if (members != null) {
             buf.append("(");
-            final Iterator mit = this.members.keySet().iterator();
+            Iterator mit = members.keySet().iterator();
             while (mit.hasNext()) {
-                final String name = mit.next();
-                buf.append(name).append("=").append(this.getMemberValue(name));
-                if (mit.hasNext()) {
+                String name = (String)mit.next();
+                buf.append(name).append("=").append(getMemberValue(name));
+                if (mit.hasNext())
                     buf.append(", ");
-                }
             }
             buf.append(")");
         }
+
         return buf.toString();
     }
-    
+
+    /**
+     * Obtains the name of the annotation type.
+     *
+     * @return the type name
+     */
     public String getTypeName() {
-        return Descriptor.toClassName(this.pool.getUtf8Info(this.typeIndex));
+        return Descriptor.toClassName(pool.getUtf8Info(typeIndex));
     }
-    
+
+    /**
+     * Obtains all the member names.
+     *
+     * @return null if no members are defined.
+     */
     public Set getMemberNames() {
-        if (this.members == null) {
+        if (members == null)
             return null;
-        }
-        return this.members.keySet();
+        else
+            return members.keySet();
     }
-    
-    public MemberValue getMemberValue(final String name) {
-        if (this.members == null) {
+
+    /**
+     * Obtains the member value with the given name.
+     *
+     * <p>If this annotation does not have a value for the
+     * specified member,
+     * this method returns null.  It does not return a
+     * <code>MemberValue</code> with the default value.
+     * The default value can be obtained from the annotation type.
+     *
+     * @param name the member name
+     * @return null if the member cannot be found or if the value is
+     * the default value.
+     *
+     * @see com.newrelic.agent.deps.javassist.bytecode.AnnotationDefaultAttribute
+     */
+    public MemberValue getMemberValue(String name) {
+        if (members == null)
             return null;
+        else {
+            Pair p = (Pair)members.get(name);
+            if (p == null)
+                return null;
+            else
+                return p.value;
         }
-        final Pair p = this.members.get(name);
-        if (p == null) {
-            return null;
-        }
-        return p.value;
     }
-    
-    public Object toAnnotationType(final ClassLoader cl, final ClassPool cp) throws ClassNotFoundException, NoSuchClassError {
-        return AnnotationImpl.make(cl, MemberValue.loadClass(cl, this.getTypeName()), cp, this);
+
+    /**
+     * Constructs an annotation-type object representing this annotation.
+     * For example, if this annotation represents <code>@Author</code>,
+     * this method returns an <code>Author</code> object.
+     *
+     * @param cl        class loader for loading an annotation type.
+     * @param cp        class pool for obtaining class files.
+     * @return the annotation
+     * @throws ClassNotFoundException   if the class cannot found.
+     * @throws NoSuchClassError         if the class linkage fails.
+     */
+    public Object toAnnotationType(ClassLoader cl, ClassPool cp)
+            throws ClassNotFoundException, NoSuchClassError
+    {
+        return AnnotationImpl.make(cl,
+                MemberValue.loadClass(cl, getTypeName()),
+                cp, this);
     }
-    
-    public void write(final AnnotationsWriter writer) throws IOException {
-        final String typeName = this.pool.getUtf8Info(this.typeIndex);
-        if (this.members == null) {
+
+    /**
+     * Writes this annotation.
+     *
+     * @param writer            the output.
+     * @throws IOException for an error during the write
+     */
+    public void write(AnnotationsWriter writer) throws IOException {
+        String typeName = pool.getUtf8Info(typeIndex);
+        if (members == null) {
             writer.annotation(typeName, 0);
             return;
         }
-        writer.annotation(typeName, this.members.size());
-        for (final Pair pair : this.members.values()) {
+
+        writer.annotation(typeName, members.size());
+        Iterator it = members.values().iterator();
+        while (it.hasNext()) {
+            Pair pair = (Pair)it.next();
             writer.memberValuePair(pair.name);
             pair.value.write(writer);
         }
     }
-    
-    @Override
-    public boolean equals(final Object obj) {
-        if (obj == this) {
+
+    /**
+     * Returns true if the given object represents the same annotation
+     * as this object.  The equality test checks the member values.
+     */
+    public boolean equals(Object obj) {
+        if (obj == this)
             return true;
-        }
-        if (obj == null || !(obj instanceof Annotation)) {
+        if (obj == null || obj instanceof Annotation == false)
             return false;
-        }
-        final Annotation other = (Annotation)obj;
-        if (!this.getTypeName().equals(other.getTypeName())) {
+
+        Annotation other = (Annotation) obj;
+
+        if (getTypeName().equals(other.getTypeName()) == false)
             return false;
-        }
-        final LinkedHashMap otherMembers = other.members;
-        if (this.members == otherMembers) {
+
+        LinkedHashMap otherMembers = other.members;
+        if (members == otherMembers)
             return true;
-        }
-        if (this.members == null) {
+        else if (members == null)
             return otherMembers == null;
-        }
-        return otherMembers != null && this.members.equals(otherMembers);
-    }
-    
-    static class Pair
-    {
-        int name;
-        MemberValue value;
+        else
+            if (otherMembers == null)
+                return false;
+            else
+                return members.equals(otherMembers);
     }
 }

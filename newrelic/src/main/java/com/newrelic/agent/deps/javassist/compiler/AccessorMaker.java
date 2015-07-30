@@ -1,65 +1,72 @@
-// 
-// Decompiled by Procyon v0.5.29
-// 
+/*
+ * Javassist, a Java-bytecode translator toolkit.
+ * Copyright (C) 1999- Shigeru Chiba. All Rights Reserved.
+ *
+ * The contents of this file are subject to the Mozilla Public License Version
+ * 1.1 (the "License"); you may not use this file except in compliance with
+ * the License.  Alternatively, the contents of this file may be used under
+ * the terms of the GNU Lesser General Public License Version 2.1 or later,
+ * or the Apache License Version 2.0.
+ *
+ * Software distributed under the License is distributed on an "AS IS" basis,
+ * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
+ * for the specific language governing rights and limitations under the
+ * License.
+ */
 
 package com.newrelic.agent.deps.javassist.compiler;
 
-import com.newrelic.agent.deps.javassist.bytecode.FieldInfo;
-import com.newrelic.agent.deps.javassist.bytecode.ExceptionsAttribute;
-import com.newrelic.agent.deps.javassist.ClassPool;
-import com.newrelic.agent.deps.javassist.bytecode.ConstPool;
-import com.newrelic.agent.deps.javassist.bytecode.ClassFile;
-import com.newrelic.agent.deps.javassist.NotFoundException;
-import com.newrelic.agent.deps.javassist.CannotCompileException;
-import com.newrelic.agent.deps.javassist.bytecode.Bytecode;
-import java.util.Map;
-import com.newrelic.agent.deps.javassist.bytecode.AttributeInfo;
-import com.newrelic.agent.deps.javassist.bytecode.SyntheticAttribute;
-import com.newrelic.agent.deps.javassist.bytecode.Descriptor;
-import com.newrelic.agent.deps.javassist.bytecode.MethodInfo;
+import com.newrelic.agent.deps.javassist.*;
+import com.newrelic.agent.deps.javassist.bytecode.*;
 import java.util.HashMap;
-import com.newrelic.agent.deps.javassist.CtClass;
 
-public class AccessorMaker
-{
+/**
+ * AccessorMaker maintains accessors to private members of an enclosing
+ * class.  It is necessary for compiling a method in an inner class.
+ */
+public class AccessorMaker {
     private CtClass clazz;
     private int uniqueNumber;
     private HashMap accessors;
-    static final String lastParamType = "com.newrelic.agent.deps.javassist.runtime.Inner";
-    
-    public AccessorMaker(final CtClass c) {
-        this.clazz = c;
-        this.uniqueNumber = 1;
-        this.accessors = new HashMap();
+
+    static final String lastParamType = "javassist.runtime.Inner";
+
+    public AccessorMaker(CtClass c) {
+        clazz = c;
+        uniqueNumber = 1;
+        accessors = new HashMap();
     }
-    
-    public String getConstructor(final CtClass c, final String desc, final MethodInfo orig) throws CompileError {
-        final String key = "<init>:" + desc;
-        String consDesc = this.accessors.get(key);
-        if (consDesc != null) {
-            return consDesc;
-        }
-        consDesc = Descriptor.appendParameter("com.newrelic.agent.deps.javassist.runtime.Inner", desc);
-        final ClassFile cf = this.clazz.getClassFile();
+
+    public String getConstructor(CtClass c, String desc, MethodInfo orig)
+            throws CompileError
+    {
+        String key = "<init>:" + desc;
+        String consDesc = (String)accessors.get(key);
+        if (consDesc != null)
+            return consDesc;     // already exists.
+
+        consDesc = Descriptor.appendParameter(lastParamType, desc);
+        ClassFile cf = clazz.getClassFile();    // turn on the modified flag. 
         try {
-            final ConstPool cp = cf.getConstPool();
-            final ClassPool pool = this.clazz.getClassPool();
-            final MethodInfo minfo = new MethodInfo(cp, "<init>", consDesc);
+            ConstPool cp = cf.getConstPool();
+            ClassPool pool = clazz.getClassPool();
+            MethodInfo minfo
+                    = new MethodInfo(cp, MethodInfo.nameInit, consDesc);
             minfo.setAccessFlags(0);
             minfo.addAttribute(new SyntheticAttribute(cp));
-            final ExceptionsAttribute ea = orig.getExceptionsAttribute();
-            if (ea != null) {
+            ExceptionsAttribute ea = orig.getExceptionsAttribute();
+            if (ea != null)
                 minfo.addAttribute(ea.copy(cp, null));
-            }
-            final CtClass[] params = Descriptor.getParameterTypes(desc, pool);
-            final Bytecode code = new Bytecode(cp);
+
+            CtClass[] params = Descriptor.getParameterTypes(desc, pool);
+            Bytecode code = new Bytecode(cp);
             code.addAload(0);
             int regno = 1;
-            for (int i = 0; i < params.length; ++i) {
+            for (int i = 0; i < params.length; ++i)
                 regno += code.addLoad(regno, params[i]);
-            }
-            code.setMaxLocals(regno + 1);
-            code.addInvokespecial(this.clazz, "<init>", desc);
+            code.setMaxLocals(regno + 1);    // the last parameter is added.
+            code.addInvokespecial(clazz, MethodInfo.nameInit, desc);
+
             code.addReturn(null);
             minfo.setCodeAttribute(code.toCodeAttribute());
             cf.addMethod(minfo);
@@ -67,44 +74,61 @@ public class AccessorMaker
         catch (CannotCompileException e) {
             throw new CompileError(e);
         }
-        catch (NotFoundException e2) {
-            throw new CompileError(e2);
+        catch (NotFoundException e) {
+            throw new CompileError(e);
         }
-        this.accessors.put(key, consDesc);
+
+        accessors.put(key, consDesc);
         return consDesc;
     }
-    
-    public String getMethodAccessor(final String name, final String desc, final String accDesc, final MethodInfo orig) throws CompileError {
-        final String key = name + ":" + desc;
-        String accName = this.accessors.get(key);
-        if (accName != null) {
-            return accName;
-        }
-        final ClassFile cf = this.clazz.getClassFile();
-        accName = this.findAccessorName(cf);
+
+    /**
+     * Returns the name of the method for accessing a private method.
+     *
+     * @param name      the name of the private method.
+     * @param desc      the descriptor of the private method.
+     * @param accDesc   the descriptor of the accessor method.  The first
+     *                  parameter type is <code>clazz</code>.
+     *                  If the private method is static,
+     *              <code>accDesc<code> must be identical to <code>desc</code>. 
+     *
+     * @param orig      the method info of the private method.
+     * @return
+     */
+    public String getMethodAccessor(String name, String desc, String accDesc,
+                                    MethodInfo orig)
+            throws CompileError
+    {
+        String key = name + ":" + desc;
+        String accName = (String)accessors.get(key);
+        if (accName != null)
+            return accName;     // already exists.
+
+        ClassFile cf = clazz.getClassFile();    // turn on the modified flag. 
+        accName = findAccessorName(cf);
         try {
-            final ConstPool cp = cf.getConstPool();
-            final ClassPool pool = this.clazz.getClassPool();
-            final MethodInfo minfo = new MethodInfo(cp, accName, accDesc);
-            minfo.setAccessFlags(8);
+            ConstPool cp = cf.getConstPool();
+            ClassPool pool = clazz.getClassPool();
+            MethodInfo minfo
+                    = new MethodInfo(cp, accName, accDesc);
+            minfo.setAccessFlags(AccessFlag.STATIC);
             minfo.addAttribute(new SyntheticAttribute(cp));
-            final ExceptionsAttribute ea = orig.getExceptionsAttribute();
-            if (ea != null) {
+            ExceptionsAttribute ea = orig.getExceptionsAttribute();
+            if (ea != null)
                 minfo.addAttribute(ea.copy(cp, null));
-            }
-            final CtClass[] params = Descriptor.getParameterTypes(accDesc, pool);
+
+            CtClass[] params = Descriptor.getParameterTypes(accDesc, pool);
             int regno = 0;
-            final Bytecode code = new Bytecode(cp);
-            for (int i = 0; i < params.length; ++i) {
+            Bytecode code = new Bytecode(cp);
+            for (int i = 0; i < params.length; ++i)
                 regno += code.addLoad(regno, params[i]);
-            }
+
             code.setMaxLocals(regno);
-            if (desc == accDesc) {
-                code.addInvokestatic(this.clazz, name, desc);
-            }
-            else {
-                code.addInvokevirtual(this.clazz, name, desc);
-            }
+            if (desc == accDesc)
+                code.addInvokestatic(clazz, name, desc);
+            else
+                code.addInvokevirtual(clazz, name, desc);
+
             code.addReturn(Descriptor.getReturnType(desc, pool));
             minfo.setCodeAttribute(code.toCodeAttribute());
             cf.addMethod(minfo);
@@ -112,37 +136,42 @@ public class AccessorMaker
         catch (CannotCompileException e) {
             throw new CompileError(e);
         }
-        catch (NotFoundException e2) {
-            throw new CompileError(e2);
+        catch (NotFoundException e) {
+            throw new CompileError(e);
         }
-        this.accessors.put(key, accName);
+
+        accessors.put(key, accName);
         return accName;
     }
-    
-    public MethodInfo getFieldGetter(final FieldInfo finfo, final boolean is_static) throws CompileError {
-        final String fieldName = finfo.getName();
-        final String key = fieldName + ":getter";
-        final Object res = this.accessors.get(key);
-        if (res != null) {
-            return (MethodInfo)res;
-        }
-        final ClassFile cf = this.clazz.getClassFile();
-        final String accName = this.findAccessorName(cf);
+
+    /**
+     * Returns the method_info representing the added getter.
+     */
+    public MethodInfo getFieldGetter(FieldInfo finfo, boolean is_static)
+            throws CompileError
+    {
+        String fieldName = finfo.getName();
+        String key = fieldName + ":getter";
+        Object res = accessors.get(key);
+        if (res != null)
+            return (MethodInfo)res;     // already exists.
+
+        ClassFile cf = clazz.getClassFile();    // turn on the modified flag. 
+        String accName = findAccessorName(cf);
         try {
-            final ConstPool cp = cf.getConstPool();
-            final ClassPool pool = this.clazz.getClassPool();
-            final String fieldType = finfo.getDescriptor();
+            ConstPool cp = cf.getConstPool();
+            ClassPool pool = clazz.getClassPool();
+            String fieldType = finfo.getDescriptor();
             String accDesc;
-            if (is_static) {
+            if (is_static)
                 accDesc = "()" + fieldType;
-            }
-            else {
-                accDesc = "(" + Descriptor.of(this.clazz) + ")" + fieldType;
-            }
-            final MethodInfo minfo = new MethodInfo(cp, accName, accDesc);
-            minfo.setAccessFlags(8);
+            else
+                accDesc = "(" + Descriptor.of(clazz) + ")" + fieldType;
+
+            MethodInfo minfo = new MethodInfo(cp, accName, accDesc);
+            minfo.setAccessFlags(AccessFlag.STATIC);
             minfo.addAttribute(new SyntheticAttribute(cp));
-            final Bytecode code = new Bytecode(cp);
+            Bytecode code = new Bytecode(cp);
             if (is_static) {
                 code.addGetstatic(Bytecode.THIS, fieldName, fieldType);
             }
@@ -151,44 +180,49 @@ public class AccessorMaker
                 code.addGetfield(Bytecode.THIS, fieldName, fieldType);
                 code.setMaxLocals(1);
             }
+
             code.addReturn(Descriptor.toCtClass(fieldType, pool));
             minfo.setCodeAttribute(code.toCodeAttribute());
             cf.addMethod(minfo);
-            this.accessors.put(key, minfo);
+            accessors.put(key, minfo);
             return minfo;
         }
         catch (CannotCompileException e) {
             throw new CompileError(e);
         }
-        catch (NotFoundException e2) {
-            throw new CompileError(e2);
+        catch (NotFoundException e) {
+            throw new CompileError(e);
         }
     }
-    
-    public MethodInfo getFieldSetter(final FieldInfo finfo, final boolean is_static) throws CompileError {
-        final String fieldName = finfo.getName();
-        final String key = fieldName + ":setter";
-        final Object res = this.accessors.get(key);
-        if (res != null) {
-            return (MethodInfo)res;
-        }
-        final ClassFile cf = this.clazz.getClassFile();
-        final String accName = this.findAccessorName(cf);
+
+    /**
+     * Returns the method_info representing the added setter.
+     */
+    public MethodInfo getFieldSetter(FieldInfo finfo, boolean is_static)
+            throws CompileError
+    {
+        String fieldName = finfo.getName();
+        String key = fieldName + ":setter";
+        Object res = accessors.get(key);
+        if (res != null)
+            return (MethodInfo)res;     // already exists.
+
+        ClassFile cf = clazz.getClassFile();    // turn on the modified flag. 
+        String accName = findAccessorName(cf);
         try {
-            final ConstPool cp = cf.getConstPool();
-            final ClassPool pool = this.clazz.getClassPool();
-            final String fieldType = finfo.getDescriptor();
+            ConstPool cp = cf.getConstPool();
+            ClassPool pool = clazz.getClassPool();
+            String fieldType = finfo.getDescriptor();
             String accDesc;
-            if (is_static) {
+            if (is_static)
                 accDesc = "(" + fieldType + ")V";
-            }
-            else {
-                accDesc = "(" + Descriptor.of(this.clazz) + fieldType + ")V";
-            }
-            final MethodInfo minfo = new MethodInfo(cp, accName, accDesc);
-            minfo.setAccessFlags(8);
+            else
+                accDesc = "(" + Descriptor.of(clazz) + fieldType + ")V";
+
+            MethodInfo minfo = new MethodInfo(cp, accName, accDesc);
+            minfo.setAccessFlags(AccessFlag.STATIC);
             minfo.addAttribute(new SyntheticAttribute(cp));
-            final Bytecode code = new Bytecode(cp);
+            Bytecode code = new Bytecode(cp);
             int reg;
             if (is_static) {
                 reg = code.addLoad(0, Descriptor.toCtClass(fieldType, pool));
@@ -196,28 +230,30 @@ public class AccessorMaker
             }
             else {
                 code.addAload(0);
-                reg = code.addLoad(1, Descriptor.toCtClass(fieldType, pool)) + 1;
+                reg = code.addLoad(1, Descriptor.toCtClass(fieldType, pool))
+                        + 1;
                 code.addPutfield(Bytecode.THIS, fieldName, fieldType);
             }
+
             code.addReturn(null);
             code.setMaxLocals(reg);
             minfo.setCodeAttribute(code.toCodeAttribute());
             cf.addMethod(minfo);
-            this.accessors.put(key, minfo);
+            accessors.put(key, minfo);
             return minfo;
         }
         catch (CannotCompileException e) {
             throw new CompileError(e);
         }
-        catch (NotFoundException e2) {
-            throw new CompileError(e2);
+        catch (NotFoundException e) {
+            throw new CompileError(e);
         }
     }
-    
-    private String findAccessorName(final ClassFile cf) {
+
+    private String findAccessorName(ClassFile cf) {
         String accName;
         do {
-            accName = "access$" + this.uniqueNumber++;
+            accName = "access$" + uniqueNumber++;
         } while (cf.getMethod(accName) != null);
         return accName;
     }

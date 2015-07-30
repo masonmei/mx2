@@ -50,7 +50,7 @@ class ExtensionInstrumentation extends InstrumentationWrapper
         private final List<ClassFileTransformer> transformers;
         
         private MultiClassFileTransformer() {
-            this.transformers = (List<ClassFileTransformer>)Lists.newCopyOnWriteArrayList();
+            this.transformers = Lists.newCopyOnWriteArrayList();
         }
         
         public byte[] transform(final ClassLoader loader, final String className, final Class<?> classBeingRedefined, final ProtectionDomain protectionDomain, byte[] classfileBuffer) throws IllegalClassFormatException {

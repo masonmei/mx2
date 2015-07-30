@@ -49,7 +49,7 @@ public class AnnotationDetails extends AnnotationVisitor
     
     Multimap<String, Object> getOrCreateAttributes() {
         if (this.attributes == null) {
-            this.attributes = Multimaps.newListMultimap((Map<String, Collection<Object>>)Maps.newHashMap(), new Supplier<List<Object>>() {
+            this.attributes = Multimaps.newListMultimap(Maps.<String, Collection<Object>>newHashMap(), new Supplier<List<Object>>() {
                 public List<Object> get() {
                     return Lists.newArrayList();
                 }

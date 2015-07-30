@@ -75,13 +75,13 @@ class InstrumentationClassVisitor extends ClassVisitor implements WeavedClassInf
     
     private InstrumentationClassVisitor(final InstrumentationPackage instrumentationPackage, final String className, final String superName) {
         super(327680);
-        this.innerClasses = (Set<InnerClassNode>)Sets.newHashSet();
-        this.newFields = (Map<String, FieldNode>)Maps.newHashMap();
-        this.existingFields = (Map<String, FieldNode>)Maps.newHashMap();
-        this.weavedMethods = (Set<Method>)Sets.newHashSet();
-        this.catchAndLogMethods = (Set<Method>)Sets.newHashSet();
-        this.tracedMethods = (Map<Method, TraceDetails>)Maps.newHashMap();
-        this.constructors = (Map<Method, MethodNode>)Maps.newHashMap();
+        this.innerClasses = Sets.newHashSet();
+        this.newFields = Maps.newHashMap();
+        this.existingFields = Maps.newHashMap();
+        this.weavedMethods = Sets.newHashSet();
+        this.catchAndLogMethods = Sets.newHashSet();
+        this.tracedMethods = Maps.newHashMap();
+        this.constructors = Maps.newHashMap();
         this.weaveAnnotation = new WeaveMatchTypeAccessor();
         this.className = className;
         this.superName = superName;
@@ -424,7 +424,7 @@ class InstrumentationClassVisitor extends ClassVisitor implements WeavedClassInf
                 this.storeLocal(throwableLocal);
                 final Runnable throwableMessage = new Runnable() {
                     public void run() {
-                        AdviceAdapter.this.loadLocal(throwableLocal);
+                        loadLocal(throwableLocal);
                     }
                 };
                 BridgeUtils.getLogger(this).logToChild(instrumentationTitle, Level.FINE, "{0}.{1}{2} threw an exception: {3}", new Object[] { className, name, desc, throwableMessage });
@@ -488,7 +488,7 @@ class InstrumentationClassVisitor extends ClassVisitor implements WeavedClassInf
                     }
                     
                     public void visitMethodInsn(final int opcode, final String owner, final String name, final String desc, final boolean itf) {
-                        if (ClassVisitor.this.reflection.process(owner, name, desc, this)) {
+                        if (reflection.process(owner, name, desc, this)) {
                             return;
                         }
                         this.addWeaveClass(Type.getObjectType(owner));

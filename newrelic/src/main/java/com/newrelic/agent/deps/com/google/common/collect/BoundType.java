@@ -12,13 +12,13 @@ public enum BoundType
     OPEN {
         @Override
         BoundType flip() {
-            return BoundType$1.CLOSED;
+            return CLOSED;
         }
     }, 
     CLOSED {
         @Override
         BoundType flip() {
-            return BoundType$2.OPEN;
+            return OPEN;
         }
     };
     

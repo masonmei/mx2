@@ -85,9 +85,9 @@ public class InstrumentationContext implements TraceDetailsList
     
     public void addWeavedMethod(final Method method, final String instrumentationTitle) {
         if (this.weavedMethods == null) {
-            this.weavedMethods = (Multimap<Method, String>)Multimaps.newSetMultimap((Map<Object, Collection<Object>>)Maps.newHashMap(), (Supplier<? extends Set<Object>>)new Supplier<Set<String>>() {
+            this.weavedMethods = Multimaps.newSetMultimap(Maps.<Method, Collection<String>>newHashMap(), new Supplier<Set<String>>() {
                 public Set<String> get() {
-                    return (Set<String>)Sets.newHashSet();
+                    return Sets.newHashSet();
                 }
             });
         }
@@ -108,23 +108,23 @@ public class InstrumentationContext implements TraceDetailsList
     }
     
     private Map<Method, PointCut> getOldInvokerStyleInstrumentationMethods() {
-        return (this.oldInvokerStyleInstrumentationMethods == null) ? Collections.emptyMap() : this.oldInvokerStyleInstrumentationMethods;
+        return (this.oldInvokerStyleInstrumentationMethods == null) ? Collections.<Method, PointCut>emptyMap() : this.oldInvokerStyleInstrumentationMethods;
     }
     
     private Map<Method, PointCut> getOldReflectionStyleInstrumentationMethods() {
-        return (this.oldReflectionStyleInstrumentationMethods == null) ? Collections.emptyMap() : this.oldReflectionStyleInstrumentationMethods;
+        return (this.oldReflectionStyleInstrumentationMethods == null) ? Collections.<Method, PointCut>emptyMap() : this.oldReflectionStyleInstrumentationMethods;
     }
     
     public Set<Method> getWeavedMethods() {
-        return (this.weavedMethods == null) ? Collections.emptySet() : this.weavedMethods.keySet();
+        return (this.weavedMethods == null) ? Collections.<Method>emptySet() : this.weavedMethods.keySet();
     }
     
     public Set<Method> getTimedMethods() {
-        return (this.timedMethods == null) ? Collections.emptySet() : this.timedMethods;
+        return (this.timedMethods == null) ? Collections.<Method>emptySet() : this.timedMethods;
     }
     
     public Collection<String> getMergeInstrumentationPackages(final Method method) {
-        return (Collection<String>)((this.weavedMethods == null) ? Collections.emptySet() : ((Collection<String>)this.weavedMethods.asMap().get(method)));
+        return (Collection<String>)((this.weavedMethods == null) ? Collections.emptySet() : this.weavedMethods.asMap().get(method));
     }
     
     public boolean isModified(final Method method) {
@@ -133,7 +133,7 @@ public class InstrumentationContext implements TraceDetailsList
     
     public void addTimedMethods(final Method... methods) {
         if (this.timedMethods == null) {
-            this.timedMethods = (Set<Method>)Sets.newHashSet();
+            this.timedMethods = Sets.newHashSet();
         }
         Collections.addAll(this.timedMethods, methods);
         this.modified = true;
@@ -141,7 +141,7 @@ public class InstrumentationContext implements TraceDetailsList
     
     public void addOldReflectionStyleInstrumentationMethod(final Method method, final PointCut pointCut) {
         if (this.oldReflectionStyleInstrumentationMethods == null) {
-            this.oldReflectionStyleInstrumentationMethods = (Map<Method, PointCut>)Maps.newHashMap();
+            this.oldReflectionStyleInstrumentationMethods = Maps.newHashMap();
         }
         this.oldReflectionStyleInstrumentationMethods.put(method, pointCut);
         this.modified = true;
@@ -149,14 +149,14 @@ public class InstrumentationContext implements TraceDetailsList
     
     public void addOldInvokerStyleInstrumentationMethod(final Method method, final PointCut pointCut) {
         if (this.oldInvokerStyleInstrumentationMethods == null) {
-            this.oldInvokerStyleInstrumentationMethods = (Map<Method, PointCut>)Maps.newHashMap();
+            this.oldInvokerStyleInstrumentationMethods = Maps.newHashMap();
         }
         this.oldInvokerStyleInstrumentationMethods.put(method, pointCut);
         this.modified = true;
     }
     
     public Map<ClassMatchVisitorFactory, OptimizedClassMatcher.Match> getMatches() {
-        return (this.matches == null) ? Collections.emptyMap() : this.matches;
+        return (this.matches == null) ? Collections.<ClassMatchVisitorFactory, OptimizedClassMatcher.Match>emptyMap() : this.matches;
     }
     
     byte[] processTransformBytes(final byte[] originalBytes, final byte[] newBytes) {
@@ -197,7 +197,7 @@ public class InstrumentationContext implements TraceDetailsList
     
     public void putMatch(final ClassMatchVisitorFactory matcher, final OptimizedClassMatcher.Match match) {
         if (this.matches == null) {
-            this.matches = (Map<ClassMatchVisitorFactory, OptimizedClassMatcher.Match>)Maps.newHashMap();
+            this.matches = Maps.newHashMap();
         }
         this.matches.put(matcher, match);
     }
@@ -230,7 +230,7 @@ public class InstrumentationContext implements TraceDetailsList
                 this.resolveBridgeMethods(reader);
             }
             else {
-                this.bridgeMethods = (Map<Method, Method>)ImmutableMap.of();
+                this.bridgeMethods = ImmutableMap.of();
             }
         }
     }
@@ -260,7 +260,7 @@ public class InstrumentationContext implements TraceDetailsList
         }
         final double partitions = (classes.length < 8) ? classes.length : 8.0;
         final int estimatedPerPartition = (int)Math.ceil(classes.length / partitions);
-        final List<List<Class<?>>> partitionsClasses = Lists.partition((List<Class<?>>)Arrays.asList((T[])classes), estimatedPerPartition);
+        final List<List<Class<?>>> partitionsClasses = Lists.partition(Arrays.asList(classes), estimatedPerPartition);
         final CountDownLatch countDownLatch = new CountDownLatch(partitionsClasses.size());
         for (final List<Class<?>> partitionClasses : partitionsClasses) {
             final Runnable matchingRunnable = new Runnable() {
@@ -280,7 +280,7 @@ public class InstrumentationContext implements TraceDetailsList
         }
         catch (InterruptedException e) {
             Agent.LOG.log(Level.INFO, "Failed to wait for matching classes");
-            Agent.LOG.log(Level.FINER, (Throwable)e, "Interrupted during class matching", new Object[0]);
+            Agent.LOG.log(Level.FINER, e, "Interrupted during class matching");
         }
         return matchingClasses;
     }
@@ -309,15 +309,15 @@ public class InstrumentationContext implements TraceDetailsList
             if (clazz.getName().startsWith("com.newrelic") || clazz.getName().startsWith("weave.")) {
                 return false;
             }
-            Agent.LOG.log(Level.FINER, "Unable to read {0}", new Object[] { clazz.getName() });
-            Agent.LOG.log(Level.FINEST, (Throwable)ex, "Unable to read {0}", new Object[] { clazz.getName() });
+            Agent.LOG.log(Level.FINER, "Unable to read {0}", clazz.getName());
+            Agent.LOG.log(Level.FINEST, (Throwable)ex, "Unable to read {0}", clazz.getName());
             return false;
         }
     }
     
     public void addBridgeMethod(final Method method) {
         if (this.bridgeMethods == null) {
-            this.bridgeMethods = (Map<Method, Method>)Maps.newHashMap();
+            this.bridgeMethods = Maps.newHashMap();
         }
         this.bridgeMethods.put(method, method);
     }
@@ -336,7 +336,7 @@ public class InstrumentationContext implements TraceDetailsList
     
     public void addClassResolver(final ClassResolver classResolver) {
         if (this.classResolvers == null) {
-            this.classResolvers = (List<ClassResolver>)Lists.newArrayList();
+            this.classResolvers = Lists.newArrayList();
         }
         this.classResolvers.add(classResolver);
     }

@@ -33,8 +33,8 @@ public class AsyncTransactionService extends AbstractService implements HarvestL
     }
     
     private static final Cache<Object, Transaction> makeCache(final RemovalListener<Object, Transaction> removalListener) {
-        final long timeoutSec = (int)ServiceFactory.getConfigService().getDefaultAgentConfig().getValue("async_timeout", (Object)180);
-        return CacheBuilder.newBuilder().weakKeys().expireAfterWrite(timeoutSec, TimeUnit.SECONDS).removalListener((RemovalListener<? super Object, ? super Object>)removalListener).build();
+        final long timeoutSec = (Long)ServiceFactory.getConfigService().getDefaultAgentConfig().getValue("async_timeout", (Object)180);
+        return CacheBuilder.newBuilder().weakKeys().expireAfterWrite(timeoutSec, TimeUnit.SECONDS).removalListener(removalListener).build();
     }
     
     public void cleanUpPendingTransactions() {

@@ -9,7 +9,6 @@ import java.io.IOException;
 import com.newrelic.agent.deps.org.yaml.snakeyaml.error.YAMLException;
 import com.newrelic.agent.deps.org.yaml.snakeyaml.error.Mark;
 import java.util.regex.Matcher;
-import java.io.Reader;
 import java.util.regex.Pattern;
 
 public class Reader

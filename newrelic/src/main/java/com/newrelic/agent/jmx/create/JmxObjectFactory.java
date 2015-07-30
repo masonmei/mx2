@@ -112,7 +112,7 @@ public class JmxObjectFactory
     private void getStoredJmxObjects(final List<JmxGet> gets, final List<JmxInvoke> invokes) {
         final Collection<Class<?>> classes = Annotations.getAnnotationClassesFromManifest(JmxInit.class, "com/newrelic/agent/jmx/values");
         if (classes != null) {
-            for (final Class<?> clazz : classes) {
+            for (final Class clazz : classes) {
                 this.convertFramework(this.loadJmxFrameworkValues(clazz), gets, invokes);
             }
         }
@@ -143,7 +143,7 @@ public class JmxObjectFactory
     
     private <T extends JmxFrameworkValues> JmxFrameworkValues loadJmxFrameworkValues(final Class<T> clazz) {
         try {
-            return clazz.getConstructor((Class<?>[])new Class[0]).newInstance(new Object[0]);
+            return clazz.getConstructor((Class<?>[])new Class[0]).newInstance();
         }
         catch (Exception e) {
             final String msg = MessageFormat.format("Unable to create jmx framework values in class {0} : {1}", clazz.getName(), e.toString());

@@ -299,8 +299,8 @@ public abstract class CtBehavior extends CtMember
                     final String src = fname + ".exit();";
                     this.insertAfter(src, true);
                 }
-                catch (NotFoundException e) {
-                    throw new CannotCompileException(e);
+                catch (NotFoundException ex) {
+                    throw new CannotCompileException(ex);
                 }
             }
         }

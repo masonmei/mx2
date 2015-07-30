@@ -13,7 +13,7 @@ public final class KeywordTable extends HashMap
         if (found == null) {
             return -1;
         }
-        return (int)found;
+        return (Integer)found;
     }
     
     public void append(final String name, final int t) {

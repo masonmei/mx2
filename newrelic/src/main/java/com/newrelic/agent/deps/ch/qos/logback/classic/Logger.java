@@ -21,7 +21,6 @@ import java.io.Serializable;
 import com.newrelic.agent.deps.ch.qos.logback.classic.spi.ILoggingEvent;
 import com.newrelic.agent.deps.ch.qos.logback.core.spi.AppenderAttachable;
 import com.newrelic.agent.deps.org.slf4j.spi.LocationAwareLogger;
-import com.newrelic.agent.deps.org.slf4j.Logger;
 
 public final class Logger implements com.newrelic.agent.deps.org.slf4j.Logger, LocationAwareLogger, AppenderAttachable<ILoggingEvent>, Serializable
 {

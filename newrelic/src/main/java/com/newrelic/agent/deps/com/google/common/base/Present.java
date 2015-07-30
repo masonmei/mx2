@@ -59,7 +59,7 @@ final class Present<T> extends Optional<T>
     
     @Override
     public <V> Optional<V> transform(final Function<? super T, V> function) {
-        return new Present<V>(Preconditions.checkNotNull(function.apply((Object)this.reference), (Object)"the Function passed to Optional.transform() must not return null."));
+        return new Present<V>(Preconditions.checkNotNull(function.apply(this.reference), "the Function passed to Optional.transform() must not return null."));
     }
     
     @Override

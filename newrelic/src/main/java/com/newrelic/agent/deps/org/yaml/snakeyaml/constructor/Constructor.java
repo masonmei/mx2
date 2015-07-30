@@ -1,6 +1,6 @@
-// 
+//
 // Decompiled by Procyon v0.5.29
-// 
+//
 
 package com.newrelic.agent.deps.org.yaml.snakeyaml.constructor;
 
@@ -15,9 +15,7 @@ import com.newrelic.agent.deps.org.yaml.snakeyaml.introspector.MethodProperty;
 import java.beans.Introspector;
 import java.lang.reflect.Array;
 import com.newrelic.agent.deps.org.yaml.snakeyaml.introspector.Property;
-import java.util.Iterator;
 import java.util.List;
-import java.lang.reflect.Constructor;
 import java.math.BigInteger;
 import java.util.Date;
 import com.newrelic.agent.deps.org.yaml.snakeyaml.nodes.MappingNode;
@@ -33,11 +31,11 @@ public class Constructor extends SafeConstructor
 {
     private final Map<String, Class<?>> typeTags;
     private final Map<Class<?>, TypeDescription> typeDefinitions;
-    
+
     public Constructor() {
         this(Object.class);
     }
-    
+
     public Constructor(final Class<?> theRoot) {
         if (theRoot == null) {
             throw new NullPointerException("Root type must be provided.");
@@ -47,11 +45,11 @@ public class Constructor extends SafeConstructor
         this.typeTags = new HashMap<String, Class<?>>();
         this.typeDefinitions = new HashMap<Class<?>, TypeDescription>();
     }
-    
+
     public Constructor(final String theRoot) throws ClassNotFoundException {
         this(Class.forName(check(theRoot)));
     }
-    
+
     private static final String check(final String s) {
         if (s == null) {
             throw new NullPointerException("Root type must be provided.");
@@ -61,7 +59,7 @@ public class Constructor extends SafeConstructor
         }
         return s;
     }
-    
+
     public TypeDescription addTypeDescription(final TypeDescription definition) {
         if (definition == null) {
             throw new NullPointerException("TypeDescription is required.");
@@ -73,7 +71,7 @@ public class Constructor extends SafeConstructor
         this.typeTags.put(tag, definition.getType());
         return this.typeDefinitions.put(definition.getType(), definition);
     }
-    
+
     protected Object callConstructor(final Node node) {
         if (Object.class.equals(node.getType())) {
             return super.callConstructor(node);
@@ -99,7 +97,7 @@ public class Constructor extends SafeConstructor
         }
         return result;
     }
-    
+
     private Object constructScalarNode(final ScalarNode node) {
         final Class<?> type = node.getType();
         Object result;
@@ -128,7 +126,7 @@ public class Constructor extends SafeConstructor
                 final Construct doubleContructor = this.yamlConstructors.get("tag:yaml.org,2002:float");
                 result = doubleContructor.construct(node);
                 if (type == Float.class || type == Float.TYPE) {
-                    result = new Float((double)result);
+                    result = new Float((Double)result);
                 }
             }
             else if (Number.class.isAssignableFrom(type) || type == Byte.TYPE || type == Short.TYPE || type == Integer.TYPE || type == Long.TYPE) {
@@ -179,7 +177,7 @@ public class Constructor extends SafeConstructor
         }
         return result;
     }
-    
+
     private Object constructMappingNode(final MappingNode node) {
         final Class<?> beanType = node.getType();
         Object object;
@@ -250,11 +248,11 @@ public class Constructor extends SafeConstructor
         }
         return object;
     }
-    
+
     private <T> T[] createArray(final Class<T> type) {
         return (T[])Array.newInstance(type.getComponentType(), 0);
     }
-    
+
     protected Property getProperty(final Class<?> type, final String name) throws IntrospectionException {
         final PropertyDescriptor[] arr$ = Introspector.getBeanInfo(type).getPropertyDescriptors();
         final int len$ = arr$.length;
@@ -283,7 +281,7 @@ public class Constructor extends SafeConstructor
         }
         return null;
     }
-    
+
     private class ConstuctYamlObject implements Construct
     {
         public Object construct(final Node node) {
@@ -328,7 +326,7 @@ public class Constructor extends SafeConstructor
                         if (Enum.class.isAssignableFrom(cl)) {
                             final String enumValueName = (String)node.getValue();
                             try {
-                                result = Enum.valueOf((Class<Object>)cl, enumValueName);
+                                result = Enum.valueOf(cl, enumValueName);
                             }
                             catch (Exception ex) {
                                 throw new YAMLException("Unable to find enum value '" + enumValueName + "' for enum class: " + cl.getName());

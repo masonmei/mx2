@@ -109,7 +109,7 @@ public class ServiceManagerImpl extends AbstractService implements ServiceManage
         super(ServiceManagerImpl.class.getSimpleName());
         this.services = new HashMap<String, Service>();
         this.statsService = new InitialStatsService();
-        this.statsWork = (List<StatsWork>)Lists.newArrayList();
+        this.statsWork = Lists.newArrayList();
         this.agentService = agent;
         this.configService = ConfigServiceFactory.createConfigService();
     }

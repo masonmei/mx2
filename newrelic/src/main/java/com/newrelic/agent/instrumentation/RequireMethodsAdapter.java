@@ -80,7 +80,7 @@ public class RequireMethodsAdapter extends ClassVisitor
     
     private void visitInterfaces(final ClassMetadata metadata) {
         final Queue<String> pendingInterfaces = new LinkedList<String>();
-        pendingInterfaces.addAll((Collection<?>)Arrays.asList(metadata.getInterfaceNames()));
+        pendingInterfaces.addAll(Arrays.asList(metadata.getInterfaceNames()));
         for (String interfaceName = pendingInterfaces.poll(); interfaceName != null; interfaceName = pendingInterfaces.poll()) {
             final ClassMetadata interfaceMetadata = new ClassMetadata(interfaceName, this.classLoader);
             final ClassReader cr = interfaceMetadata.getClassReader();
@@ -88,7 +88,7 @@ public class RequireMethodsAdapter extends ClassVisitor
             if (this.requiredMethods.size() == 0) {
                 return;
             }
-            pendingInterfaces.addAll((Collection<?>)Arrays.asList(interfaceMetadata.getInterfaceNames()));
+            pendingInterfaces.addAll(Arrays.asList(interfaceMetadata.getInterfaceNames()));
         }
     }
     

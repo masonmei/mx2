@@ -270,7 +270,7 @@ public abstract class CtClass
         throw new RuntimeException(this.getName() + " is not a class");
     }
     
-    public CtField[] getFields() {
+    public Object[] getFields() {
         return new CtField[0];
     }
     

@@ -4,8 +4,6 @@
 
 package com.newrelic.agent.bridge;
 
-import com.newrelic.api.agent.TransactionNamePriority;
-
 public enum TransactionNamePriority
 {
     NONE, 

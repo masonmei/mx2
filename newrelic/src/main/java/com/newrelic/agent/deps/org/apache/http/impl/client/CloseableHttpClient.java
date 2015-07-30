@@ -66,16 +66,16 @@ public abstract class CloseableHttpClient implements HttpClient, Closeable
     }
     
     public <T> T execute(final HttpUriRequest request, final ResponseHandler<? extends T> responseHandler) throws IOException, ClientProtocolException {
-        return this.execute(request, responseHandler, (HttpContext)null);
+        return this.execute(request, responseHandler, null);
     }
     
     public <T> T execute(final HttpUriRequest request, final ResponseHandler<? extends T> responseHandler, final HttpContext context) throws IOException, ClientProtocolException {
         final HttpHost target = determineTarget(request);
-        return this.execute(target, (HttpRequest)request, responseHandler, context);
+        return this.execute(target, request, responseHandler, context);
     }
     
     public <T> T execute(final HttpHost target, final HttpRequest request, final ResponseHandler<? extends T> responseHandler) throws IOException, ClientProtocolException {
-        return this.execute(target, request, responseHandler, (HttpContext)null);
+        return this.execute(target, request, responseHandler, null);
     }
     
     public <T> T execute(final HttpHost target, final HttpRequest request, final ResponseHandler<? extends T> responseHandler, final HttpContext context) throws IOException, ClientProtocolException {
@@ -83,15 +83,15 @@ public abstract class CloseableHttpClient implements HttpClient, Closeable
         final HttpResponse response = this.execute(target, request, context);
         T result;
         try {
-            result = (T)responseHandler.handleResponse(response);
+            result = responseHandler.handleResponse(response);
         }
         catch (Exception t2) {
             final HttpEntity entity = response.getEntity();
             try {
                 EntityUtils.consume(entity);
             }
-            catch (Exception t2) {
-                this.log.warn("Error consuming content after an exception.", t2);
+            catch (Exception et2) {
+                this.log.warn("Error consuming content after an exception.", et2);
             }
             if (t2 instanceof RuntimeException) {
                 throw (RuntimeException)t2;

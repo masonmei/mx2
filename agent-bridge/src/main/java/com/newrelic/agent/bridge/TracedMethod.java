@@ -4,8 +4,6 @@
 
 package com.newrelic.agent.bridge;
 
-import com.newrelic.api.agent.TracedMethod;
-
 public interface TracedMethod extends com.newrelic.api.agent.TracedMethod
 {
     TracedMethod getParentTracedMethod();

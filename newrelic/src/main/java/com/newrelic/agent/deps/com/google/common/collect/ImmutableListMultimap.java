@@ -95,13 +95,13 @@ public class ImmutableListMultimap<K, V> extends ImmutableMultimap<K, V> impleme
     }
     
     ImmutableListMultimap(final ImmutableMap<K, ImmutableList<V>> map, final int size) {
-        super((ImmutableMap<K, ? extends ImmutableCollection<Object>>)map, size);
+        super(map, size);
     }
     
     @Override
     public ImmutableList<V> get(@Nullable final K key) {
         final ImmutableList<V> list = (ImmutableList<V>)this.map.get(key);
-        return (list == null) ? ImmutableList.of() : list;
+        return (list == null) ? ImmutableList.<V>of() : list;
     }
     
     @Override
@@ -116,7 +116,7 @@ public class ImmutableListMultimap<K, V> extends ImmutableMultimap<K, V> impleme
             builder.put(entry.getValue(), entry.getKey());
         }
         final ImmutableListMultimap<V, K> invertedMultimap = builder.build();
-        invertedMultimap.inverse = (ImmutableListMultimap<V, K>)this;
+        invertedMultimap.inverse = this;
         return invertedMultimap;
     }
     

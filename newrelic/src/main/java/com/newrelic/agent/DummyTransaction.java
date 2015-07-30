@@ -91,8 +91,8 @@ public class DummyTransaction extends Transaction
         this.dummyObjectMap = new DummyMap<String, Object>();
         this.dummyStringMap = new DummyMap<String, Map<String, String>>();
         this.lock = new Object();
-        this.insights = (Insights)new DummyInsights();
-        this.appNameAndConfig = new AtomicReference<AppNameAndConfig>(new AppNameAndConfig(this, PriorityApplicationName.NONE, null));
+        this.insights = new DummyInsights();
+        this.appNameAndConfig = new AtomicReference<AppNameAndConfig>(new AppNameAndConfig(PriorityApplicationName.NONE, getAgentConfig()));
         this.tracerList = new TracerList(null, new DummySet<TransactionActivity>());
         this.timer = new TransactionTimer(0L);
         this.inboundHeaderState = new InboundHeaderState(null, null);
@@ -122,13 +122,13 @@ public class DummyTransaction extends Transaction
     }
     
     public AgentConfig getAgentConfig() {
-        AgentConfig config = null;
+        AgentConfig config;
         do {
             final AppNameAndConfig nc = this.appNameAndConfig.get();
             config = nc.config;
             if (config == null) {
                 config = ServiceFactory.getConfigService().getAgentConfig(nc.name.getName());
-                if (this.appNameAndConfig.compareAndSet(nc, new AppNameAndConfig(this, nc.name, config))) {
+                if (this.appNameAndConfig.compareAndSet(nc, new AppNameAndConfig(nc.name, config))) {
                     continue;
                 }
                 config = null;

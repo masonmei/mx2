@@ -56,14 +56,14 @@ public final class Enums
         synchronized (Enums.enumConstantCache) {
             Map<String, WeakReference<? extends Enum<?>>> constants = Enums.enumConstantCache.get(enumClass);
             if (constants == null) {
-                constants = populateCache((Class<Enum>)enumClass);
+                constants = populateCache(enumClass);
             }
             return constants;
         }
     }
     
     public static <T extends Enum<T>> Converter<String, T> stringConverter(final Class<T> enumClass) {
-        return (Converter<String, T>)new StringConverter((Class<Enum>)enumClass);
+        return (Converter<String, T>)new StringConverter(enumClass);
     }
     
     static {

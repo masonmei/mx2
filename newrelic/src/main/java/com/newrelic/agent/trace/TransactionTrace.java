@@ -61,8 +61,8 @@ public class TransactionTrace implements Comparable<TransactionTrace>, JSONStrea
         this.children = buildChildren(transactionData.getTracers());
         this.sqlTracers = new HashMap<ConnectionFactory, List<ExplainPlanExecutor>>();
         final Tracer tracer = transactionData.getRootTracer();
-        this.userAttributes = (Map<String, Object>)Maps.newHashMap();
-        this.agentAttributes = (Map<String, Object>)Maps.newHashMap();
+        this.userAttributes = Maps.newHashMap();
+        this.agentAttributes = Maps.newHashMap();
         if (ServiceFactory.getAttributesService().isAttributesEnabledForTraces(this.applicationName)) {
             if (transactionData.getAgentAttributes() != null) {
                 this.agentAttributes.putAll(transactionData.getAgentAttributes());
@@ -72,7 +72,7 @@ public class TransactionTrace implements Comparable<TransactionTrace>, JSONStrea
             }
         }
         this.prefixedAttributes = transactionData.getPrefixedAttributes();
-        this.intrinsicAttributes = (Map<String, Object>)Maps.newHashMap();
+        this.intrinsicAttributes = Maps.newHashMap();
         if (transactionData.getIntrinsicAttributes() != null) {
             this.intrinsicAttributes.putAll(transactionData.getIntrinsicAttributes());
         }
@@ -87,12 +87,12 @@ public class TransactionTrace implements Comparable<TransactionTrace>, JSONStrea
         this.guid = transactionData.getGuid();
         (this.rootSegment = new TransactionSegment(transactionData.getTransactionTracerConfig(), sqlObfuscator, this.rootTracerStartTime, tracer, this.createTransactionSegment(transactionData.getTransactionTracerConfig(), sqlObfuscator, tracer, null))).setMetricName("ROOT");
         this.duration = tracer.getDurationInMilliseconds();
-        final Long gcTime = this.intrinsicAttributes.remove("gc_time");
+        final Long gcTime = (Long)this.intrinsicAttributes.remove("gc_time");
         if (gcTime != null) {
             final float gcTimeInSecs = gcTime / 1.0E9f;
             this.intrinsicAttributes.put("gc_time", gcTimeInSecs);
         }
-        final Long cpuTime = this.intrinsicAttributes.remove("cpu_time");
+        final Long cpuTime = (Long)this.intrinsicAttributes.remove("cpu_time");
         if (cpuTime != null) {
             final float cpuTimeInSecs = cpuTime / 1.0E9f;
             this.intrinsicAttributes.put("cpu_time", cpuTimeInSecs);
@@ -237,7 +237,7 @@ public class TransactionTrace implements Comparable<TransactionTrace>, JSONStrea
     }
     
     private Map<String, Object> getAgentAtts() {
-        final Map<String, Object> atts = (Map<String, Object>)Maps.newHashMap();
+        final Map<String, Object> atts = Maps.newHashMap();
         atts.putAll(this.agentAttributes);
         if (this.prefixedAttributes != null && !this.prefixedAttributes.isEmpty()) {
             atts.putAll(AttributesUtils.appendAttributePrefixes(this.prefixedAttributes));

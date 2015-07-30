@@ -10,7 +10,6 @@ import com.newrelic.agent.deps.org.apache.http.client.AuthenticationStrategy;
 import com.newrelic.agent.deps.org.apache.http.HttpResponse;
 import com.newrelic.agent.deps.org.apache.http.HttpHost;
 import com.newrelic.agent.deps.org.apache.commons.logging.Log;
-import com.newrelic.agent.deps.org.apache.http.impl.auth.HttpAuthenticator;
 
 @Deprecated
 public class HttpAuthenticator extends com.newrelic.agent.deps.org.apache.http.impl.auth.HttpAuthenticator

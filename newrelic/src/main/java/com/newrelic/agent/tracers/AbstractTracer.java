@@ -50,7 +50,7 @@ public abstract class AbstractTracer implements Tracer
             }
             else if ("s" == methodName) {
                 if (args.length == 2) {
-                    this.finish((int)args[0], args[1]);
+                    this.finish((Integer)args[0], args[1]);
                 }
                 else {
                     Agent.LOG.severe(MessageFormat.format("Tracer.finish(int, Object) was invoked with {0} arguments(s)", args.length));

@@ -147,9 +147,9 @@ public class InstrumentationConstructor extends Constructor
         }
         
         public Object construct(final Node node) {
-            final List args = InstrumentationConstructor.this.constructSequence((SequenceNode)node);
-            final List methodDescriptors = args.subList(1, args.size());
-            return PointCutFactory.createExactMethodMatcher(args.get(0), methodDescriptors);
+            final List args = InstrumentationConstructor.this.constructSequence((SequenceNode) node);
+            final List<String> methodDescriptors = args.subList(1, args.size());
+            return PointCutFactory.createExactMethodMatcher((String)args.get(0), methodDescriptors);
         }
     }
     

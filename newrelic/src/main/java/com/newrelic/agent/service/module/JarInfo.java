@@ -15,7 +15,7 @@ class JarInfo
     
     public JarInfo(final String version, final Map<String, String> attributes) {
         this.version = ((version == null) ? " " : version);
-        this.attributes = (Map<String, String>)((attributes == null) ? ImmutableMap.of() : ImmutableMap.copyOf((Map<?, ?>)attributes));
+        this.attributes = (Map<String, String>)((attributes == null) ? ImmutableMap.of() : ImmutableMap.copyOf(attributes));
     }
     
     public String toString() {
@@ -61,6 +61,6 @@ class JarInfo
     }
     
     static {
-        MISSING = new JarInfo(" ", (Map<String, String>)ImmutableMap.of());
+        MISSING = new JarInfo(" ", ImmutableMap.<String, String>of());
     }
 }

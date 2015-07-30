@@ -29,7 +29,7 @@ public class DeadlockDetectorService extends AbstractService
     public DeadlockDetectorService() {
         super(DeadlockDetectorService.class.getSimpleName());
         final AgentConfig config = ServiceFactory.getConfigService().getDefaultAgentConfig();
-        this.isEnabled = (boolean)config.getValue("deadlock_detector.enabled", (Object)true);
+        this.isEnabled = (Boolean)config.getValue("deadlock_detector.enabled", (Object)true);
         final ThreadFactory threadFactory = this.isEnabled ? new DefaultThreadFactory("New Relic Deadlock Detector", true) : null;
         this.scheduledExecutor = (this.isEnabled ? Executors.newSingleThreadScheduledExecutor(threadFactory) : null);
     }

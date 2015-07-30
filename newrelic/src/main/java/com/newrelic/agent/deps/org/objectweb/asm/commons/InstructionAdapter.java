@@ -480,7 +480,6 @@ public class InstructionAdapter extends MethodVisitor
                             throw new IllegalArgumentException();
                         }
                     }
-                    break;
                 }
                 default: {
                     throw new IllegalArgumentException();
@@ -720,28 +719,28 @@ public class InstructionAdapter extends MethodVisitor
     
     public void visitLdcInsn(final Object o) {
         if (o instanceof Integer) {
-            this.iconst((int)o);
+            this.iconst((Integer)o);
         }
         else if (o instanceof Byte) {
-            this.iconst((int)o);
+            this.iconst((Byte)o);
         }
         else if (o instanceof Character) {
-            this.iconst((char)o);
+            this.iconst((Character)o);
         }
         else if (o instanceof Short) {
-            this.iconst((int)o);
+            this.iconst((Short)o);
         }
         else if (o instanceof Boolean) {
-            this.iconst(((boolean)o) ? 1 : 0);
+            this.iconst(((Boolean)o) ? 1 : 0);
         }
         else if (o instanceof Float) {
-            this.fconst((float)o);
+            this.fconst((Float)o);
         }
         else if (o instanceof Long) {
-            this.lconst((long)o);
+            this.lconst((Long)o);
         }
         else if (o instanceof Double) {
-            this.dconst((double)o);
+            this.dconst((Double)o);
         }
         else if (o instanceof String) {
             this.aconst(o);

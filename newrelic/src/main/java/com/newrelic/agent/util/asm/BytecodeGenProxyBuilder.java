@@ -4,23 +4,20 @@
 
 package com.newrelic.agent.util.asm;
 
-import com.newrelic.agent.instrumentation.tracing.BridgeUtils;
-import com.newrelic.agent.bridge.Transaction;
-import java.lang.reflect.Proxy;
-import java.lang.reflect.Array;
-import java.lang.reflect.Field;
-import com.newrelic.agent.deps.org.objectweb.asm.commons.AdviceAdapter;
-import com.newrelic.agent.deps.org.objectweb.asm.MethodVisitor;
-import java.util.logging.Level;
 import com.newrelic.agent.Agent;
-import java.lang.reflect.Method;
-import java.lang.reflect.InvocationHandler;
-import java.util.Collections;
-import com.newrelic.agent.util.AgentError;
+import com.newrelic.agent.bridge.Transaction;
 import com.newrelic.agent.deps.com.google.common.collect.Maps;
+import com.newrelic.agent.deps.org.objectweb.asm.MethodVisitor;
 import com.newrelic.agent.deps.org.objectweb.asm.Type;
-import java.util.Map;
+import com.newrelic.agent.deps.org.objectweb.asm.commons.AdviceAdapter;
 import com.newrelic.agent.deps.org.objectweb.asm.commons.GeneratorAdapter;
+import com.newrelic.agent.instrumentation.tracing.BridgeUtils;
+import com.newrelic.agent.util.AgentError;
+
+import java.lang.reflect.*;
+import java.util.Collections;
+import java.util.Map;
+import java.util.logging.Level;
 
 public class BytecodeGenProxyBuilder<T>
 {
@@ -48,7 +45,7 @@ public class BytecodeGenProxyBuilder<T>
     
     private BytecodeGenProxyBuilder<T> addArgument(final Object instance, final Runnable runnable) {
         if (this.arguments == null) {
-            this.arguments = (Map<Object, Runnable>)Maps.newHashMap();
+            this.arguments = Maps.newHashMap();
         }
         if (runnable == null) {
             throw new AgentError("Runnable was null");
@@ -59,18 +56,18 @@ public class BytecodeGenProxyBuilder<T>
     
     public BytecodeGenProxyBuilder<T> addLoader(final Type t, final VariableLoader loader) {
         if (this.loaders == null) {
-            this.loaders = (Map<Type, VariableLoader>)Maps.newHashMap();
+            this.loaders = Maps.newHashMap();
         }
         this.loaders.put(t, loader);
         return this;
     }
     
     private Map<Type, VariableLoader> getLoaders() {
-        return (this.loaders == null) ? Collections.emptyMap() : this.loaders;
+        return (this.loaders == null) ? Collections.<Type, VariableLoader>emptyMap() : this.loaders;
     }
     
     private Map<Object, Runnable> getArguments() {
-        return (this.arguments == null) ? Collections.emptyMap() : this.arguments;
+        return (this.arguments == null) ? Collections.<Object, Runnable>emptyMap() : this.arguments;
     }
     
     public T build() {
@@ -172,7 +169,7 @@ public class BytecodeGenProxyBuilder<T>
                             }
                         }
                         case 1: {
-                            BytecodeGenProxyBuilder.this.methodAdapter.push((boolean)value);
+                            BytecodeGenProxyBuilder.this.methodAdapter.push((Boolean)value);
                         }
                         case 5: {
                             BytecodeGenProxyBuilder.this.methodAdapter.push(((Number)value).intValue());

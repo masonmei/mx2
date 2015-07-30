@@ -9,6 +9,7 @@ import com.newrelic.agent.commands.CommandException;
 import java.util.Map;
 import com.newrelic.agent.IRPMService;
 import com.newrelic.agent.commands.AbstractCommand;
+import com.sun.org.apache.xpath.internal.operations.Bool;
 
 public class StopProfilerCommand extends AbstractCommand
 {
@@ -32,7 +33,7 @@ public class StopProfilerCommand extends AbstractCommand
         if (!(report instanceof Boolean)) {
             throw new CommandException("The start_profiler command encountered an invalid report_data parameter: " + report);
         }
-        this.profilerControl.stopProfiler(((Number)profileId).longValue(), (boolean)report);
+        this.profilerControl.stopProfiler(((Number)profileId).longValue(), (Boolean)report);
         return Collections.EMPTY_MAP;
     }
 }

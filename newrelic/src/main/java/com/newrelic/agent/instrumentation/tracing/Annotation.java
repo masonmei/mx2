@@ -24,7 +24,7 @@ public class Annotation extends AnnotationVisitor
     }
     
     public Map<String, Object> getValues() {
-        return (this.values == null) ? Collections.emptyMap() : this.values;
+        return (this.values == null) ? Collections.<String, Object> emptyMap() : this.values;
     }
     
     public void visit(final String name, final Object value) {
@@ -34,13 +34,13 @@ public class Annotation extends AnnotationVisitor
     
     private Map<String, Object> getOrCreateValues() {
         if (this.values == null) {
-            this.values = (Map<String, Object>)Maps.newHashMap();
+            this.values = Maps.newHashMap();
         }
         return this.values;
     }
     
     public AnnotationVisitor visitArray(final String name) {
-        List<Object> list = this.getOrCreateValues().get(name);
+        List<Object> list = (List<Object>) this.getOrCreateValues().get(name);
         if (list == null) {
             list = Lists.newArrayList();
             this.getOrCreateValues().put(name, list);
@@ -57,23 +57,23 @@ public class Annotation extends AnnotationVisitor
     }
     
     private boolean getBoolean(final String name) {
-        final Boolean value = this.getValues().get(name);
+        final Boolean value = (Boolean) this.getValues().get(name);
         return value != null && value;
     }
     
     public TraceDetails getTraceDetails(final boolean custom) {
-        final String metricName = this.getValues().get("metricName");
+        final String metricName = (String) this.getValues().get("metricName");
         final boolean dispatcher = this.getBoolean("dispatcher");
         if (dispatcher && metricName != null) {
             this.traceDetailsBuilder.setTransactionName(TransactionNamePriority.CUSTOM_HIGH, false, "Custom", metricName);
         }
-        final List<Object> rollupMetricNames = this.getValues().get("rollupMetricName");
+        final List<Object> rollupMetricNames = (List<Object>) this.getValues().get("rollupMetricName");
         if (rollupMetricNames != null) {
             for (final Object v : rollupMetricNames) {
                 this.traceDetailsBuilder.addRollupMetricName(v.toString());
             }
         }
-        return new DelegatingTraceDetails(this.traceDetailsBuilder.setMetricName(metricName).setDispatcher(dispatcher).setTracerFactoryName(this.getValues().get("tracerFactoryName")).setExcludeFromTransactionTrace(this.getBoolean("skipTransactionTrace")).setNameTransaction(this.getBoolean("nameTransaction")).setCustom(custom).setExcludeFromTransactionTrace(this.getBoolean("excludeFromTransactionTrace")).setLeaf(this.getBoolean("leaf")).build()) {
+        return new DelegatingTraceDetails(this.traceDetailsBuilder.setMetricName(metricName).setDispatcher(dispatcher).setTracerFactoryName((String) this.getValues().get("tracerFactoryName")).setExcludeFromTransactionTrace(this.getBoolean("skipTransactionTrace")).setNameTransaction(this.getBoolean("nameTransaction")).setCustom(custom).setExcludeFromTransactionTrace(this.getBoolean("excludeFromTransactionTrace")).setLeaf(this.getBoolean("leaf")).build()) {
             public String getFullMetricName(final String className, final String methodName) {
                 return this.metricName();
             }

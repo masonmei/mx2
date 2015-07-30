@@ -40,7 +40,7 @@ public class Environment implements JSONStreamAware, Cloneable
     private volatile Object solrVersion;
     
     public Environment(final AgentConfig config, final String logFilePath) {
-        this.listeners = (List<EnvironmentChangeListener>)Lists.newCopyOnWriteArrayList();
+        this.listeners = Lists.newCopyOnWriteArrayList();
         this.environmentMap = new ArrayList<List<?>>();
         if (config.isSendEnvironmentInfo()) {
             final OperatingSystemMXBean systemMXBean = ManagementFactory.getOperatingSystemMXBean();

@@ -1,734 +1,1776 @@
-// 
-// Decompiled by Procyon v0.5.29
-// 
-
+/***
+ * ASM: a very small and fast Java bytecode manipulation framework
+ * Copyright (c) 2000-2011 INRIA, France Telecom
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. Neither the name of the copyright holders nor the names of its
+ *    contributors may be used to endorse or promote products derived from
+ *    this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE.
+ */
 package com.newrelic.agent.deps.org.objectweb.asm;
 
-public class ClassWriter extends ClassVisitor
-{
+/**
+ * A {@link ClassVisitor} that generates classes in bytecode form. More
+ * precisely this visitor generates a byte array conforming to the Java class
+ * file format. It can be used alone, to generate a Java class "from scratch",
+ * or with one or more {@link ClassReader ClassReader} and adapter class visitor
+ * to generate a modified class from one or more existing Java classes.
+ *
+ * @author Eric Bruneton
+ */
+public class ClassWriter extends ClassVisitor {
+
+    /**
+     * Flag to automatically compute the maximum stack size and the maximum
+     * number of local variables of methods. If this flag is set, then the
+     * arguments of the {@link MethodVisitor#visitMaxs visitMaxs} method of the
+     * {@link MethodVisitor} returned by the {@link #visitMethod visitMethod}
+     * method will be ignored, and computed automatically from the signature and
+     * the bytecode of each method.
+     *
+     * @see #ClassWriter(int)
+     */
     public static final int COMPUTE_MAXS = 1;
+
+    /**
+     * Flag to automatically compute the stack map frames of methods from
+     * scratch. If this flag is set, then the calls to the
+     * {@link MethodVisitor#visitFrame} method are ignored, and the stack map
+     * frames are recomputed from the methods bytecode. The arguments of the
+     * {@link MethodVisitor#visitMaxs visitMaxs} method are also ignored and
+     * recomputed from the bytecode. In other words, computeFrames implies
+     * computeMaxs.
+     *
+     * @see #ClassWriter(int)
+     */
     public static final int COMPUTE_FRAMES = 2;
-    static final byte[] a;
-    ClassReader M;
-    int b;
-    int c;
-    final ByteVector d;
-    Item[] e;
-    int f;
-    final Item g;
-    final Item h;
-    final Item i;
-    final Item j;
-    Item[] H;
-    private short G;
-    private int k;
-    private int l;
-    String I;
-    private int m;
-    private int n;
-    private int o;
-    private int[] p;
-    private int q;
-    private ByteVector r;
-    private int s;
-    private int t;
-    private AnnotationWriter u;
-    private AnnotationWriter v;
-    private AnnotationWriter N;
-    private AnnotationWriter O;
-    private Attribute w;
-    private int x;
-    private ByteVector y;
-    int z;
-    ByteVector A;
-    FieldWriter B;
-    FieldWriter C;
-    MethodWriter D;
-    MethodWriter E;
-    private boolean K;
-    private boolean J;
-    boolean L;
-    
-    public ClassWriter(final int n) {
-        super(327680);
-        this.c = 1;
-        this.d = new ByteVector();
-        this.e = new Item[256];
-        this.f = (int)(0.75 * this.e.length);
-        this.g = new Item();
-        this.h = new Item();
-        this.i = new Item();
-        this.j = new Item();
-        this.K = ((n & 0x1) != 0x0);
-        this.J = ((n & 0x2) != 0x0);
-    }
-    
-    public ClassWriter(final ClassReader m, final int n) {
-        this(n);
-        m.a(this);
-        this.M = m;
-    }
-    
-    public final void visit(final int b, final int k, final String i, final String s, final String s2, final String[] array) {
-        this.b = b;
-        this.k = k;
-        this.l = this.newClass(i);
-        this.I = i;
-        if (s != null) {
-            this.m = this.newUTF8(s);
+
+    /**
+     * Pseudo access flag to distinguish between the synthetic attribute and the
+     * synthetic access flag.
+     */
+    static final int ACC_SYNTHETIC_ATTRIBUTE = 0x40000;
+
+    /**
+     * Factor to convert from ACC_SYNTHETIC_ATTRIBUTE to Opcode.ACC_SYNTHETIC.
+     */
+    static final int TO_ACC_SYNTHETIC = ACC_SYNTHETIC_ATTRIBUTE
+            / Opcodes.ACC_SYNTHETIC;
+
+    /**
+     * The type of instructions without any argument.
+     */
+    static final int NOARG_INSN = 0;
+
+    /**
+     * The type of instructions with an signed byte argument.
+     */
+    static final int SBYTE_INSN = 1;
+
+    /**
+     * The type of instructions with an signed short argument.
+     */
+    static final int SHORT_INSN = 2;
+
+    /**
+     * The type of instructions with a local variable index argument.
+     */
+    static final int VAR_INSN = 3;
+
+    /**
+     * The type of instructions with an implicit local variable index argument.
+     */
+    static final int IMPLVAR_INSN = 4;
+
+    /**
+     * The type of instructions with a type descriptor argument.
+     */
+    static final int TYPE_INSN = 5;
+
+    /**
+     * The type of field and method invocations instructions.
+     */
+    static final int FIELDORMETH_INSN = 6;
+
+    /**
+     * The type of the INVOKEINTERFACE/INVOKEDYNAMIC instruction.
+     */
+    static final int ITFMETH_INSN = 7;
+
+    /**
+     * The type of the INVOKEDYNAMIC instruction.
+     */
+    static final int INDYMETH_INSN = 8;
+
+    /**
+     * The type of instructions with a 2 bytes bytecode offset label.
+     */
+    static final int LABEL_INSN = 9;
+
+    /**
+     * The type of instructions with a 4 bytes bytecode offset label.
+     */
+    static final int LABELW_INSN = 10;
+
+    /**
+     * The type of the LDC instruction.
+     */
+    static final int LDC_INSN = 11;
+
+    /**
+     * The type of the LDC_W and LDC2_W instructions.
+     */
+    static final int LDCW_INSN = 12;
+
+    /**
+     * The type of the IINC instruction.
+     */
+    static final int IINC_INSN = 13;
+
+    /**
+     * The type of the TABLESWITCH instruction.
+     */
+    static final int TABL_INSN = 14;
+
+    /**
+     * The type of the LOOKUPSWITCH instruction.
+     */
+    static final int LOOK_INSN = 15;
+
+    /**
+     * The type of the MULTIANEWARRAY instruction.
+     */
+    static final int MANA_INSN = 16;
+
+    /**
+     * The type of the WIDE instruction.
+     */
+    static final int WIDE_INSN = 17;
+
+    /**
+     * The instruction types of all JVM opcodes.
+     */
+    static final byte[] TYPE;
+
+    /**
+     * The type of CONSTANT_Class constant pool items.
+     */
+    static final int CLASS = 7;
+
+    /**
+     * The type of CONSTANT_Fieldref constant pool items.
+     */
+    static final int FIELD = 9;
+
+    /**
+     * The type of CONSTANT_Methodref constant pool items.
+     */
+    static final int METH = 10;
+
+    /**
+     * The type of CONSTANT_InterfaceMethodref constant pool items.
+     */
+    static final int IMETH = 11;
+
+    /**
+     * The type of CONSTANT_String constant pool items.
+     */
+    static final int STR = 8;
+
+    /**
+     * The type of CONSTANT_Integer constant pool items.
+     */
+    static final int INT = 3;
+
+    /**
+     * The type of CONSTANT_Float constant pool items.
+     */
+    static final int FLOAT = 4;
+
+    /**
+     * The type of CONSTANT_Long constant pool items.
+     */
+    static final int LONG = 5;
+
+    /**
+     * The type of CONSTANT_Double constant pool items.
+     */
+    static final int DOUBLE = 6;
+
+    /**
+     * The type of CONSTANT_NameAndType constant pool items.
+     */
+    static final int NAME_TYPE = 12;
+
+    /**
+     * The type of CONSTANT_Utf8 constant pool items.
+     */
+    static final int UTF8 = 1;
+
+    /**
+     * The type of CONSTANT_MethodType constant pool items.
+     */
+    static final int MTYPE = 16;
+
+    /**
+     * The type of CONSTANT_MethodHandle constant pool items.
+     */
+    static final int HANDLE = 15;
+
+    /**
+     * The type of CONSTANT_InvokeDynamic constant pool items.
+     */
+    static final int INDY = 18;
+
+    /**
+     * The base value for all CONSTANT_MethodHandle constant pool items.
+     * Internally, ASM store the 9 variations of CONSTANT_MethodHandle into 9
+     * different items.
+     */
+    static final int HANDLE_BASE = 20;
+
+    /**
+     * Normal type Item stored in the ClassWriter {@link ClassWriter#typeTable},
+     * instead of the constant pool, in order to avoid clashes with normal
+     * constant pool items in the ClassWriter constant pool's hash table.
+     */
+    static final int TYPE_NORMAL = 30;
+
+    /**
+     * Uninitialized type Item stored in the ClassWriter
+     * {@link ClassWriter#typeTable}, instead of the constant pool, in order to
+     * avoid clashes with normal constant pool items in the ClassWriter constant
+     * pool's hash table.
+     */
+    static final int TYPE_UNINIT = 31;
+
+    /**
+     * Merged type Item stored in the ClassWriter {@link ClassWriter#typeTable},
+     * instead of the constant pool, in order to avoid clashes with normal
+     * constant pool items in the ClassWriter constant pool's hash table.
+     */
+    static final int TYPE_MERGED = 32;
+
+    /**
+     * The type of BootstrapMethods items. These items are stored in a special
+     * class attribute named BootstrapMethods and not in the constant pool.
+     */
+    static final int BSM = 33;
+
+    /**
+     * The class reader from which this class writer was constructed, if any.
+     */
+    ClassReader cr;
+
+    /**
+     * Minor and major version numbers of the class to be generated.
+     */
+    int version;
+
+    /**
+     * Index of the next item to be added in the constant pool.
+     */
+    int index;
+
+    /**
+     * The constant pool of this class.
+     */
+    final ByteVector pool;
+
+    /**
+     * The constant pool's hash table data.
+     */
+    Item[] items;
+
+    /**
+     * The threshold of the constant pool's hash table.
+     */
+    int threshold;
+
+    /**
+     * A reusable key used to look for items in the {@link #items} hash table.
+     */
+    final Item key;
+
+    /**
+     * A reusable key used to look for items in the {@link #items} hash table.
+     */
+    final Item key2;
+
+    /**
+     * A reusable key used to look for items in the {@link #items} hash table.
+     */
+    final Item key3;
+
+    /**
+     * A reusable key used to look for items in the {@link #items} hash table.
+     */
+    final Item key4;
+
+    /**
+     * A type table used to temporarily store internal names that will not
+     * necessarily be stored in the constant pool. This type table is used by
+     * the control flow and data flow analysis algorithm used to compute stack
+     * map frames from scratch. This array associates to each index <tt>i</tt>
+     * the Item whose index is <tt>i</tt>. All Item objects stored in this array
+     * are also stored in the {@link #items} hash table. These two arrays allow
+     * to retrieve an Item from its index or, conversely, to get the index of an
+     * Item from its value. Each Item stores an internal name in its
+     * {@link Item#strVal1} field.
+     */
+    Item[] typeTable;
+
+    /**
+     * Number of elements in the {@link #typeTable} array.
+     */
+    private short typeCount;
+
+    /**
+     * The access flags of this class.
+     */
+    private int access;
+
+    /**
+     * The constant pool item that contains the internal name of this class.
+     */
+    private int name;
+
+    /**
+     * The internal name of this class.
+     */
+    String thisName;
+
+    /**
+     * The constant pool item that contains the signature of this class.
+     */
+    private int signature;
+
+    /**
+     * The constant pool item that contains the internal name of the super class
+     * of this class.
+     */
+    private int superName;
+
+    /**
+     * Number of interfaces implemented or extended by this class or interface.
+     */
+    private int interfaceCount;
+
+    /**
+     * The interfaces implemented or extended by this class or interface. More
+     * precisely, this array contains the indexes of the constant pool items
+     * that contain the internal names of these interfaces.
+     */
+    private int[] interfaces;
+
+    /**
+     * The index of the constant pool item that contains the name of the source
+     * file from which this class was compiled.
+     */
+    private int sourceFile;
+
+    /**
+     * The SourceDebug attribute of this class.
+     */
+    private ByteVector sourceDebug;
+
+    /**
+     * The constant pool item that contains the name of the enclosing class of
+     * this class.
+     */
+    private int enclosingMethodOwner;
+
+    /**
+     * The constant pool item that contains the name and descriptor of the
+     * enclosing method of this class.
+     */
+    private int enclosingMethod;
+
+    /**
+     * The runtime visible annotations of this class.
+     */
+    private AnnotationWriter anns;
+
+    /**
+     * The runtime invisible annotations of this class.
+     */
+    private AnnotationWriter ianns;
+
+    /**
+     * The runtime visible type annotations of this class.
+     */
+    private AnnotationWriter tanns;
+
+    /**
+     * The runtime invisible type annotations of this class.
+     */
+    private AnnotationWriter itanns;
+
+    /**
+     * The non standard attributes of this class.
+     */
+    private Attribute attrs;
+
+    /**
+     * The number of entries in the InnerClasses attribute.
+     */
+    private int innerClassesCount;
+
+    /**
+     * The InnerClasses attribute.
+     */
+    private ByteVector innerClasses;
+
+    /**
+     * The number of entries in the BootstrapMethods attribute.
+     */
+    int bootstrapMethodsCount;
+
+    /**
+     * The BootstrapMethods attribute.
+     */
+    ByteVector bootstrapMethods;
+
+    /**
+     * The fields of this class. These fields are stored in a linked list of
+     * {@link FieldWriter} objects, linked to each other by their
+     * {@link FieldWriter#fv} field. This field stores the first element of this
+     * list.
+     */
+    FieldWriter firstField;
+
+    /**
+     * The fields of this class. These fields are stored in a linked list of
+     * {@link FieldWriter} objects, linked to each other by their
+     * {@link FieldWriter#fv} field. This field stores the last element of this
+     * list.
+     */
+    FieldWriter lastField;
+
+    /**
+     * The methods of this class. These methods are stored in a linked list of
+     * {@link MethodWriter} objects, linked to each other by their
+     * {@link MethodWriter#mv} field. This field stores the first element of
+     * this list.
+     */
+    MethodWriter firstMethod;
+
+    /**
+     * The methods of this class. These methods are stored in a linked list of
+     * {@link MethodWriter} objects, linked to each other by their
+     * {@link MethodWriter#mv} field. This field stores the last element of this
+     * list.
+     */
+    MethodWriter lastMethod;
+
+    /**
+     * <tt>true</tt> if the maximum stack size and number of local variables
+     * must be automatically computed.
+     */
+    private boolean computeMaxs;
+
+    /**
+     * <tt>true</tt> if the stack map frames must be recomputed from scratch.
+     */
+    private boolean computeFrames;
+
+    /**
+     * <tt>true</tt> if the stack map tables of this class are invalid. The
+     * {@link MethodWriter#resizeInstructions} method cannot transform existing
+     * stack map tables, and so produces potentially invalid classes when it is
+     * executed. In this case the class is reread and rewritten with the
+     * {@link #COMPUTE_FRAMES} option (the resizeInstructions method can resize
+     * stack map tables when this option is used).
+     */
+    boolean invalidFrames;
+
+    // ------------------------------------------------------------------------
+    // Static initializer
+    // ------------------------------------------------------------------------
+
+    /**
+     * Computes the instruction types of JVM opcodes.
+     */
+    static {
+        int i;
+        byte[] b = new byte[220];
+        String s = "AAAAAAAAAAAAAAAABCLMMDDDDDEEEEEEEEEEEEEEEEEEEEAAAAAAAADD"
+                + "DDDEEEEEEEEEEEEEEEEEEEEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                + "AAAAAAAAAAAAAAAAANAAAAAAAAAAAAAAAAAAAAJJJJJJJJJJJJJJJJDOPAA"
+                + "AAAAGGGGGGGHIFBFAAFFAARQJJKKJJJJJJJJJJJJJJJJJJ";
+        for (i = 0; i < b.length; ++i) {
+            b[i] = (byte) (s.charAt(i) - 'A');
         }
-        this.n = ((s2 == null) ? 0 : this.newClass(s2));
-        if (array != null && array.length > 0) {
-            this.o = array.length;
-            this.p = new int[this.o];
-            for (int j = 0; j < this.o; ++j) {
-                this.p[j] = this.newClass(array[j]);
+        TYPE = b;
+
+        // code to generate the above string
+        //
+        // // SBYTE_INSN instructions
+        // b[Constants.NEWARRAY] = SBYTE_INSN;
+        // b[Constants.BIPUSH] = SBYTE_INSN;
+        //
+        // // SHORT_INSN instructions
+        // b[Constants.SIPUSH] = SHORT_INSN;
+        //
+        // // (IMPL)VAR_INSN instructions
+        // b[Constants.RET] = VAR_INSN;
+        // for (i = Constants.ILOAD; i <= Constants.ALOAD; ++i) {
+        // b[i] = VAR_INSN;
+        // }
+        // for (i = Constants.ISTORE; i <= Constants.ASTORE; ++i) {
+        // b[i] = VAR_INSN;
+        // }
+        // for (i = 26; i <= 45; ++i) { // ILOAD_0 to ALOAD_3
+        // b[i] = IMPLVAR_INSN;
+        // }
+        // for (i = 59; i <= 78; ++i) { // ISTORE_0 to ASTORE_3
+        // b[i] = IMPLVAR_INSN;
+        // }
+        //
+        // // TYPE_INSN instructions
+        // b[Constants.NEW] = TYPE_INSN;
+        // b[Constants.ANEWARRAY] = TYPE_INSN;
+        // b[Constants.CHECKCAST] = TYPE_INSN;
+        // b[Constants.INSTANCEOF] = TYPE_INSN;
+        //
+        // // (Set)FIELDORMETH_INSN instructions
+        // for (i = Constants.GETSTATIC; i <= Constants.INVOKESTATIC; ++i) {
+        // b[i] = FIELDORMETH_INSN;
+        // }
+        // b[Constants.INVOKEINTERFACE] = ITFMETH_INSN;
+        // b[Constants.INVOKEDYNAMIC] = INDYMETH_INSN;
+        //
+        // // LABEL(W)_INSN instructions
+        // for (i = Constants.IFEQ; i <= Constants.JSR; ++i) {
+        // b[i] = LABEL_INSN;
+        // }
+        // b[Constants.IFNULL] = LABEL_INSN;
+        // b[Constants.IFNONNULL] = LABEL_INSN;
+        // b[200] = LABELW_INSN; // GOTO_W
+        // b[201] = LABELW_INSN; // JSR_W
+        // // temporary opcodes used internally by ASM - see Label and
+        // MethodWriter
+        // for (i = 202; i < 220; ++i) {
+        // b[i] = LABEL_INSN;
+        // }
+        //
+        // // LDC(_W) instructions
+        // b[Constants.LDC] = LDC_INSN;
+        // b[19] = LDCW_INSN; // LDC_W
+        // b[20] = LDCW_INSN; // LDC2_W
+        //
+        // // special instructions
+        // b[Constants.IINC] = IINC_INSN;
+        // b[Constants.TABLESWITCH] = TABL_INSN;
+        // b[Constants.LOOKUPSWITCH] = LOOK_INSN;
+        // b[Constants.MULTIANEWARRAY] = MANA_INSN;
+        // b[196] = WIDE_INSN; // WIDE
+        //
+        // for (i = 0; i < b.length; ++i) {
+        // System.err.print((char)('A' + b[i]));
+        // }
+        // System.err.println();
+    }
+
+    // ------------------------------------------------------------------------
+    // Constructor
+    // ------------------------------------------------------------------------
+
+    /**
+     * Constructs a new {@link ClassWriter} object.
+     *
+     * @param flags
+     *            option flags that can be used to modify the default behavior
+     *            of this class. See {@link #COMPUTE_MAXS},
+     *            {@link #COMPUTE_FRAMES}.
+     */
+    public ClassWriter(final int flags) {
+        super(Opcodes.ASM5);
+        index = 1;
+        pool = new ByteVector();
+        items = new Item[256];
+        threshold = (int) (0.75d * items.length);
+        key = new Item();
+        key2 = new Item();
+        key3 = new Item();
+        key4 = new Item();
+        this.computeMaxs = (flags & COMPUTE_MAXS) != 0;
+        this.computeFrames = (flags & COMPUTE_FRAMES) != 0;
+    }
+
+    /**
+     * Constructs a new {@link ClassWriter} object and enables optimizations for
+     * "mostly add" bytecode transformations. These optimizations are the
+     * following:
+     *
+     * <ul>
+     * <li>The constant pool from the original class is copied as is in the new
+     * class, which saves time. New constant pool entries will be added at the
+     * end if necessary, but unused constant pool entries <i>won't be
+     * removed</i>.</li>
+     * <li>Methods that are not transformed are copied as is in the new class,
+     * directly from the original class bytecode (i.e. without emitting visit
+     * events for all the method instructions), which saves a <i>lot</i> of
+     * time. Untransformed methods are detected by the fact that the
+     * {@link ClassReader} receives {@link MethodVisitor} objects that come from
+     * a {@link ClassWriter} (and not from any other {@link ClassVisitor}
+     * instance).</li>
+     * </ul>
+     *
+     * @param classReader
+     *            the {@link ClassReader} used to read the original class. It
+     *            will be used to copy the entire constant pool from the
+     *            original class and also to copy other fragments of original
+     *            bytecode where applicable.
+     * @param flags
+     *            option flags that can be used to modify the default behavior
+     *            of this class. <i>These option flags do not affect methods
+     *            that are copied as is in the new class. This means that the
+     *            maximum stack size nor the stack frames will be computed for
+     *            these methods</i>. See {@link #COMPUTE_MAXS},
+     *            {@link #COMPUTE_FRAMES}.
+     */
+    public ClassWriter(final ClassReader classReader, final int flags) {
+        this(flags);
+        classReader.copyPool(this);
+        this.cr = classReader;
+    }
+
+    // ------------------------------------------------------------------------
+    // Implementation of the ClassVisitor abstract class
+    // ------------------------------------------------------------------------
+
+    @Override
+    public final void visit(final int version, final int access,
+                            final String name, final String signature, final String superName,
+                            final String[] interfaces) {
+        this.version = version;
+        this.access = access;
+        this.name = newClass(name);
+        thisName = name;
+        if (ClassReader.SIGNATURES && signature != null) {
+            this.signature = newUTF8(signature);
+        }
+        this.superName = superName == null ? 0 : newClass(superName);
+        if (interfaces != null && interfaces.length > 0) {
+            interfaceCount = interfaces.length;
+            this.interfaces = new int[interfaceCount];
+            for (int i = 0; i < interfaceCount; ++i) {
+                this.interfaces[i] = newClass(interfaces[i]);
             }
         }
     }
-    
-    public final void visitSource(final String s, final String s2) {
-        if (s != null) {
-            this.q = this.newUTF8(s);
+
+    @Override
+    public final void visitSource(final String file, final String debug) {
+        if (file != null) {
+            sourceFile = newUTF8(file);
         }
-        if (s2 != null) {
-            this.r = new ByteVector().encodeUTF8(s2, 0, Integer.MAX_VALUE);
-        }
-    }
-    
-    public final void visitOuterClass(final String s, final String s2, final String s3) {
-        this.s = this.newClass(s);
-        if (s2 != null && s3 != null) {
-            this.t = this.newNameType(s2, s3);
+        if (debug != null) {
+            sourceDebug = new ByteVector().encodeUTF8(debug, 0,
+                    Integer.MAX_VALUE);
         }
     }
-    
-    public final AnnotationVisitor visitAnnotation(final String s, final boolean b) {
-        final ByteVector byteVector = new ByteVector();
-        byteVector.putShort(this.newUTF8(s)).putShort(0);
-        final AnnotationWriter annotationWriter = new AnnotationWriter(this, true, byteVector, byteVector, 2);
-        if (b) {
-            annotationWriter.g = this.u;
-            this.u = annotationWriter;
-        }
-        else {
-            annotationWriter.g = this.v;
-            this.v = annotationWriter;
-        }
-        return annotationWriter;
-    }
-    
-    public final AnnotationVisitor visitTypeAnnotation(final int n, final TypePath typePath, final String s, final boolean b) {
-        final ByteVector byteVector = new ByteVector();
-        AnnotationWriter.a(n, typePath, byteVector);
-        byteVector.putShort(this.newUTF8(s)).putShort(0);
-        final AnnotationWriter annotationWriter = new AnnotationWriter(this, true, byteVector, byteVector, byteVector.b - 2);
-        if (b) {
-            annotationWriter.g = this.N;
-            this.N = annotationWriter;
-        }
-        else {
-            annotationWriter.g = this.O;
-            this.O = annotationWriter;
-        }
-        return annotationWriter;
-    }
-    
-    public final void visitAttribute(final Attribute w) {
-        w.a = this.w;
-        this.w = w;
-    }
-    
-    public final void visitInnerClass(final String s, final String s2, final String s3, final int n) {
-        if (this.y == null) {
-            this.y = new ByteVector();
-        }
-        final Item a = this.a(s);
-        if (a.c == 0) {
-            ++this.x;
-            this.y.putShort(a.a);
-            this.y.putShort((s2 == null) ? 0 : this.newClass(s2));
-            this.y.putShort((s3 == null) ? 0 : this.newUTF8(s3));
-            this.y.putShort(n);
-            a.c = this.x;
+
+    @Override
+    public final void visitOuterClass(final String owner, final String name,
+                                      final String desc) {
+        enclosingMethodOwner = newClass(owner);
+        if (name != null && desc != null) {
+            enclosingMethod = newNameType(name, desc);
         }
     }
-    
-    public final FieldVisitor visitField(final int n, final String s, final String s2, final String s3, final Object o) {
-        return new FieldWriter(this, n, s, s2, s3, o);
+
+    @Override
+    public final AnnotationVisitor visitAnnotation(final String desc,
+                                                   final boolean visible) {
+        if (!ClassReader.ANNOTATIONS) {
+            return null;
+        }
+        ByteVector bv = new ByteVector();
+        // write type, and reserve space for values count
+        bv.putShort(newUTF8(desc)).putShort(0);
+        AnnotationWriter aw = new AnnotationWriter(this, true, bv, bv, 2);
+        if (visible) {
+            aw.next = anns;
+            anns = aw;
+        } else {
+            aw.next = ianns;
+            ianns = aw;
+        }
+        return aw;
     }
-    
-    public final MethodVisitor visitMethod(final int n, final String s, final String s2, final String s3, final String[] array) {
-        return new MethodWriter(this, n, s, s2, s3, array, this.K, this.J);
+
+    @Override
+    public final AnnotationVisitor visitTypeAnnotation(int typeRef,
+                                                       TypePath typePath, final String desc, final boolean visible) {
+        if (!ClassReader.ANNOTATIONS) {
+            return null;
+        }
+        ByteVector bv = new ByteVector();
+        // write target_type and target_info
+        AnnotationWriter.putTarget(typeRef, typePath, bv);
+        // write type, and reserve space for values count
+        bv.putShort(newUTF8(desc)).putShort(0);
+        AnnotationWriter aw = new AnnotationWriter(this, true, bv, bv,
+                bv.length - 2);
+        if (visible) {
+            aw.next = tanns;
+            tanns = aw;
+        } else {
+            aw.next = itanns;
+            itanns = aw;
+        }
+        return aw;
     }
-    
+
+    @Override
+    public final void visitAttribute(final Attribute attr) {
+        attr.next = attrs;
+        attrs = attr;
+    }
+
+    @Override
+    public final void visitInnerClass(final String name,
+                                      final String outerName, final String innerName, final int access) {
+        if (innerClasses == null) {
+            innerClasses = new ByteVector();
+        }
+        // Sec. 4.7.6 of the JVMS states "Every CONSTANT_Class_info entry in the
+        // constant_pool table which represents a class or interface C that is
+        // not a package member must have exactly one corresponding entry in the
+        // classes array". To avoid duplicates we keep track in the intVal field
+        // of the Item of each CONSTANT_Class_info entry C whether an inner
+        // class entry has already been added for C (this field is unused for
+        // class entries, and changing its value does not change the hashcode
+        // and equality tests). If so we store the index of this inner class
+        // entry (plus one) in intVal. This hack allows duplicate detection in
+        // O(1) time.
+        Item nameItem = newClassItem(name);
+        if (nameItem.intVal == 0) {
+            ++innerClassesCount;
+            innerClasses.putShort(nameItem.index);
+            innerClasses.putShort(outerName == null ? 0 : newClass(outerName));
+            innerClasses.putShort(innerName == null ? 0 : newUTF8(innerName));
+            innerClasses.putShort(access);
+            nameItem.intVal = innerClassesCount;
+        } else {
+            // Compare the inner classes entry nameItem.intVal - 1 with the
+            // arguments of this method and throw an exception if there is a
+            // difference?
+        }
+    }
+
+    @Override
+    public final FieldVisitor visitField(final int access, final String name,
+                                         final String desc, final String signature, final Object value) {
+        return new FieldWriter(this, access, name, desc, signature, value);
+    }
+
+    @Override
+    public final MethodVisitor visitMethod(final int access, final String name,
+                                           final String desc, final String signature, final String[] exceptions) {
+        return new MethodWriter(this, access, name, desc, signature,
+                exceptions, computeMaxs, computeFrames);
+    }
+
+    @Override
     public final void visitEnd() {
     }
-    
+
+    // ------------------------------------------------------------------------
+    // Other public methods
+    // ------------------------------------------------------------------------
+
+    /**
+     * Returns the bytecode of the class that was build with this class writer.
+     *
+     * @return the bytecode of the class that was build with this class writer.
+     */
     public byte[] toByteArray() {
-        if (this.c > 65535) {
+        if (index > 0xFFFF) {
             throw new RuntimeException("Class file too large!");
         }
-        int n = 24 + 2 * this.o;
-        int n2 = 0;
-        for (FieldWriter b = this.B; b != null; b = (FieldWriter)b.fv) {
-            ++n2;
-            n += b.a();
+        // computes the real size of the bytecode of this class
+        int size = 24 + 2 * interfaceCount;
+        int nbFields = 0;
+        FieldWriter fb = firstField;
+        while (fb != null) {
+            ++nbFields;
+            size += fb.getSize();
+            fb = (FieldWriter) fb.fv;
         }
-        int n3 = 0;
-        for (MethodWriter d = this.D; d != null; d = (MethodWriter)d.mv) {
-            ++n3;
-            n += d.a();
+        int nbMethods = 0;
+        MethodWriter mb = firstMethod;
+        while (mb != null) {
+            ++nbMethods;
+            size += mb.getSize();
+            mb = (MethodWriter) mb.mv;
         }
-        int n4 = 0;
-        if (this.A != null) {
-            ++n4;
-            n += 8 + this.A.b;
-            this.newUTF8("BootstrapMethods");
+        int attributeCount = 0;
+        if (bootstrapMethods != null) {
+            // we put it as first attribute in order to improve a bit
+            // ClassReader.copyBootstrapMethods
+            ++attributeCount;
+            size += 8 + bootstrapMethods.length;
+            newUTF8("BootstrapMethods");
         }
-        if (this.m != 0) {
-            ++n4;
-            n += 8;
-            this.newUTF8("Signature");
+        if (ClassReader.SIGNATURES && signature != 0) {
+            ++attributeCount;
+            size += 8;
+            newUTF8("Signature");
         }
-        if (this.q != 0) {
-            ++n4;
-            n += 8;
-            this.newUTF8("SourceFile");
+        if (sourceFile != 0) {
+            ++attributeCount;
+            size += 8;
+            newUTF8("SourceFile");
         }
-        if (this.r != null) {
-            ++n4;
-            n += this.r.b + 6;
-            this.newUTF8("SourceDebugExtension");
+        if (sourceDebug != null) {
+            ++attributeCount;
+            size += sourceDebug.length + 6;
+            newUTF8("SourceDebugExtension");
         }
-        if (this.s != 0) {
-            ++n4;
-            n += 10;
-            this.newUTF8("EnclosingMethod");
+        if (enclosingMethodOwner != 0) {
+            ++attributeCount;
+            size += 10;
+            newUTF8("EnclosingMethod");
         }
-        if ((this.k & 0x20000) != 0x0) {
-            ++n4;
-            n += 6;
-            this.newUTF8("Deprecated");
+        if ((access & Opcodes.ACC_DEPRECATED) != 0) {
+            ++attributeCount;
+            size += 6;
+            newUTF8("Deprecated");
         }
-        if ((this.k & 0x1000) != 0x0 && ((this.b & 0xFFFF) < 49 || (this.k & 0x40000) != 0x0)) {
-            ++n4;
-            n += 6;
-            this.newUTF8("Synthetic");
-        }
-        if (this.y != null) {
-            ++n4;
-            n += 8 + this.y.b;
-            this.newUTF8("InnerClasses");
-        }
-        if (this.u != null) {
-            ++n4;
-            n += 8 + this.u.a();
-            this.newUTF8("RuntimeVisibleAnnotations");
-        }
-        if (this.v != null) {
-            ++n4;
-            n += 8 + this.v.a();
-            this.newUTF8("RuntimeInvisibleAnnotations");
-        }
-        if (this.N != null) {
-            ++n4;
-            n += 8 + this.N.a();
-            this.newUTF8("RuntimeVisibleTypeAnnotations");
-        }
-        if (this.O != null) {
-            ++n4;
-            n += 8 + this.O.a();
-            this.newUTF8("RuntimeInvisibleTypeAnnotations");
-        }
-        if (this.w != null) {
-            n4 += this.w.a();
-            n += this.w.a(this, null, 0, -1, -1);
-        }
-        final ByteVector byteVector = new ByteVector(n + this.d.b);
-        byteVector.putInt(-889275714).putInt(this.b);
-        byteVector.putShort(this.c).putByteArray(this.d.a, 0, this.d.b);
-        byteVector.putShort(this.k & ~(0x60000 | (this.k & 0x40000) / 64)).putShort(this.l).putShort(this.n);
-        byteVector.putShort(this.o);
-        for (int i = 0; i < this.o; ++i) {
-            byteVector.putShort(this.p[i]);
-        }
-        byteVector.putShort(n2);
-        for (FieldWriter b2 = this.B; b2 != null; b2 = (FieldWriter)b2.fv) {
-            b2.a(byteVector);
-        }
-        byteVector.putShort(n3);
-        for (MethodWriter d2 = this.D; d2 != null; d2 = (MethodWriter)d2.mv) {
-            d2.a(byteVector);
-        }
-        byteVector.putShort(n4);
-        if (this.A != null) {
-            byteVector.putShort(this.newUTF8("BootstrapMethods"));
-            byteVector.putInt(this.A.b + 2).putShort(this.z);
-            byteVector.putByteArray(this.A.a, 0, this.A.b);
-        }
-        if (this.m != 0) {
-            byteVector.putShort(this.newUTF8("Signature")).putInt(2).putShort(this.m);
-        }
-        if (this.q != 0) {
-            byteVector.putShort(this.newUTF8("SourceFile")).putInt(2).putShort(this.q);
-        }
-        if (this.r != null) {
-            final int b3 = this.r.b;
-            byteVector.putShort(this.newUTF8("SourceDebugExtension")).putInt(b3);
-            byteVector.putByteArray(this.r.a, 0, b3);
-        }
-        if (this.s != 0) {
-            byteVector.putShort(this.newUTF8("EnclosingMethod")).putInt(4);
-            byteVector.putShort(this.s).putShort(this.t);
-        }
-        if ((this.k & 0x20000) != 0x0) {
-            byteVector.putShort(this.newUTF8("Deprecated")).putInt(0);
-        }
-        if ((this.k & 0x1000) != 0x0 && ((this.b & 0xFFFF) < 49 || (this.k & 0x40000) != 0x0)) {
-            byteVector.putShort(this.newUTF8("Synthetic")).putInt(0);
-        }
-        if (this.y != null) {
-            byteVector.putShort(this.newUTF8("InnerClasses"));
-            byteVector.putInt(this.y.b + 2).putShort(this.x);
-            byteVector.putByteArray(this.y.a, 0, this.y.b);
-        }
-        if (this.u != null) {
-            byteVector.putShort(this.newUTF8("RuntimeVisibleAnnotations"));
-            this.u.a(byteVector);
-        }
-        if (this.v != null) {
-            byteVector.putShort(this.newUTF8("RuntimeInvisibleAnnotations"));
-            this.v.a(byteVector);
-        }
-        if (this.N != null) {
-            byteVector.putShort(this.newUTF8("RuntimeVisibleTypeAnnotations"));
-            this.N.a(byteVector);
-        }
-        if (this.O != null) {
-            byteVector.putShort(this.newUTF8("RuntimeInvisibleTypeAnnotations"));
-            this.O.a(byteVector);
-        }
-        if (this.w != null) {
-            this.w.a(this, null, 0, -1, -1, byteVector);
-        }
-        if (this.L) {
-            this.u = null;
-            this.v = null;
-            this.w = null;
-            this.x = 0;
-            this.y = null;
-            this.z = 0;
-            this.A = null;
-            this.B = null;
-            this.C = null;
-            this.D = null;
-            this.E = null;
-            this.K = false;
-            this.J = true;
-            this.L = false;
-            new ClassReader(byteVector.a).accept(this, 4);
-            return this.toByteArray();
-        }
-        return byteVector.a;
-    }
-    
-    Item a(final Object o) {
-        if (o instanceof Integer) {
-            return this.a((int)o);
-        }
-        if (o instanceof Byte) {
-            return this.a((int)o);
-        }
-        if (o instanceof Character) {
-            return this.a((char)o);
-        }
-        if (o instanceof Short) {
-            return this.a((int)o);
-        }
-        if (o instanceof Boolean) {
-            return this.a(((boolean)o) ? 1 : 0);
-        }
-        if (o instanceof Float) {
-            return this.a((float)o);
-        }
-        if (o instanceof Long) {
-            return this.a((long)o);
-        }
-        if (o instanceof Double) {
-            return this.a((double)o);
-        }
-        if (o instanceof String) {
-            return this.b((String)o);
-        }
-        if (o instanceof Type) {
-            final Type type = (Type)o;
-            final int sort = type.getSort();
-            if (sort == 10) {
-                return this.a(type.getInternalName());
+        if ((access & Opcodes.ACC_SYNTHETIC) != 0) {
+            if ((version & 0xFFFF) < Opcodes.V1_5
+                    || (access & ACC_SYNTHETIC_ATTRIBUTE) != 0) {
+                ++attributeCount;
+                size += 6;
+                newUTF8("Synthetic");
             }
-            if (sort == 11) {
-                return this.c(type.getDescriptor());
+        }
+        if (innerClasses != null) {
+            ++attributeCount;
+            size += 8 + innerClasses.length;
+            newUTF8("InnerClasses");
+        }
+        if (ClassReader.ANNOTATIONS && anns != null) {
+            ++attributeCount;
+            size += 8 + anns.getSize();
+            newUTF8("RuntimeVisibleAnnotations");
+        }
+        if (ClassReader.ANNOTATIONS && ianns != null) {
+            ++attributeCount;
+            size += 8 + ianns.getSize();
+            newUTF8("RuntimeInvisibleAnnotations");
+        }
+        if (ClassReader.ANNOTATIONS && tanns != null) {
+            ++attributeCount;
+            size += 8 + tanns.getSize();
+            newUTF8("RuntimeVisibleTypeAnnotations");
+        }
+        if (ClassReader.ANNOTATIONS && itanns != null) {
+            ++attributeCount;
+            size += 8 + itanns.getSize();
+            newUTF8("RuntimeInvisibleTypeAnnotations");
+        }
+        if (attrs != null) {
+            attributeCount += attrs.getCount();
+            size += attrs.getSize(this, null, 0, -1, -1);
+        }
+        size += pool.length;
+        // allocates a byte vector of this size, in order to avoid unnecessary
+        // arraycopy operations in the ByteVector.enlarge() method
+        ByteVector out = new ByteVector(size);
+        out.putInt(0xCAFEBABE).putInt(version);
+        out.putShort(index).putByteArray(pool.data, 0, pool.length);
+        int mask = Opcodes.ACC_DEPRECATED | ACC_SYNTHETIC_ATTRIBUTE
+                | ((access & ACC_SYNTHETIC_ATTRIBUTE) / TO_ACC_SYNTHETIC);
+        out.putShort(access & ~mask).putShort(name).putShort(superName);
+        out.putShort(interfaceCount);
+        for (int i = 0; i < interfaceCount; ++i) {
+            out.putShort(interfaces[i]);
+        }
+        out.putShort(nbFields);
+        fb = firstField;
+        while (fb != null) {
+            fb.put(out);
+            fb = (FieldWriter) fb.fv;
+        }
+        out.putShort(nbMethods);
+        mb = firstMethod;
+        while (mb != null) {
+            mb.put(out);
+            mb = (MethodWriter) mb.mv;
+        }
+        out.putShort(attributeCount);
+        if (bootstrapMethods != null) {
+            out.putShort(newUTF8("BootstrapMethods"));
+            out.putInt(bootstrapMethods.length + 2).putShort(
+                    bootstrapMethodsCount);
+            out.putByteArray(bootstrapMethods.data, 0, bootstrapMethods.length);
+        }
+        if (ClassReader.SIGNATURES && signature != 0) {
+            out.putShort(newUTF8("Signature")).putInt(2).putShort(signature);
+        }
+        if (sourceFile != 0) {
+            out.putShort(newUTF8("SourceFile")).putInt(2).putShort(sourceFile);
+        }
+        if (sourceDebug != null) {
+            int len = sourceDebug.length;
+            out.putShort(newUTF8("SourceDebugExtension")).putInt(len);
+            out.putByteArray(sourceDebug.data, 0, len);
+        }
+        if (enclosingMethodOwner != 0) {
+            out.putShort(newUTF8("EnclosingMethod")).putInt(4);
+            out.putShort(enclosingMethodOwner).putShort(enclosingMethod);
+        }
+        if ((access & Opcodes.ACC_DEPRECATED) != 0) {
+            out.putShort(newUTF8("Deprecated")).putInt(0);
+        }
+        if ((access & Opcodes.ACC_SYNTHETIC) != 0) {
+            if ((version & 0xFFFF) < Opcodes.V1_5
+                    || (access & ACC_SYNTHETIC_ATTRIBUTE) != 0) {
+                out.putShort(newUTF8("Synthetic")).putInt(0);
             }
-            return this.a(type.getDescriptor());
         }
-        else {
-            if (o instanceof Handle) {
-                final Handle handle = (Handle)o;
-                return this.a(handle.a, handle.b, handle.c, handle.d);
+        if (innerClasses != null) {
+            out.putShort(newUTF8("InnerClasses"));
+            out.putInt(innerClasses.length + 2).putShort(innerClassesCount);
+            out.putByteArray(innerClasses.data, 0, innerClasses.length);
+        }
+        if (ClassReader.ANNOTATIONS && anns != null) {
+            out.putShort(newUTF8("RuntimeVisibleAnnotations"));
+            anns.put(out);
+        }
+        if (ClassReader.ANNOTATIONS && ianns != null) {
+            out.putShort(newUTF8("RuntimeInvisibleAnnotations"));
+            ianns.put(out);
+        }
+        if (ClassReader.ANNOTATIONS && tanns != null) {
+            out.putShort(newUTF8("RuntimeVisibleTypeAnnotations"));
+            tanns.put(out);
+        }
+        if (ClassReader.ANNOTATIONS && itanns != null) {
+            out.putShort(newUTF8("RuntimeInvisibleTypeAnnotations"));
+            itanns.put(out);
+        }
+        if (attrs != null) {
+            attrs.put(this, null, 0, -1, -1, out);
+        }
+        if (invalidFrames) {
+            anns = null;
+            ianns = null;
+            attrs = null;
+            innerClassesCount = 0;
+            innerClasses = null;
+            bootstrapMethodsCount = 0;
+            bootstrapMethods = null;
+            firstField = null;
+            lastField = null;
+            firstMethod = null;
+            lastMethod = null;
+            computeMaxs = false;
+            computeFrames = true;
+            invalidFrames = false;
+            new ClassReader(out.data).accept(this, ClassReader.SKIP_FRAMES);
+            return toByteArray();
+        }
+        return out.data;
+    }
+
+    // ------------------------------------------------------------------------
+    // Utility methods: constant pool management
+    // ------------------------------------------------------------------------
+
+    /**
+     * Adds a number or string constant to the constant pool of the class being
+     * build. Does nothing if the constant pool already contains a similar item.
+     *
+     * @param cst
+     *            the value of the constant to be added to the constant pool.
+     *            This parameter must be an {@link Integer}, a {@link Float}, a
+     *            {@link Long}, a {@link Double}, a {@link String} or a
+     *            {@link Type}.
+     * @return a new or already existing constant item with the given value.
+     */
+    Item newConstItem(final Object cst) {
+        if (cst instanceof Integer) {
+            int val = ((Integer) cst).intValue();
+            return newInteger(val);
+        } else if (cst instanceof Byte) {
+            int val = ((Byte) cst).intValue();
+            return newInteger(val);
+        } else if (cst instanceof Character) {
+            int val = ((Character) cst).charValue();
+            return newInteger(val);
+        } else if (cst instanceof Short) {
+            int val = ((Short) cst).intValue();
+            return newInteger(val);
+        } else if (cst instanceof Boolean) {
+            int val = ((Boolean) cst).booleanValue() ? 1 : 0;
+            return newInteger(val);
+        } else if (cst instanceof Float) {
+            float val = ((Float) cst).floatValue();
+            return newFloat(val);
+        } else if (cst instanceof Long) {
+            long val = ((Long) cst).longValue();
+            return newLong(val);
+        } else if (cst instanceof Double) {
+            double val = ((Double) cst).doubleValue();
+            return newDouble(val);
+        } else if (cst instanceof String) {
+            return newString((String) cst);
+        } else if (cst instanceof Type) {
+            Type t = (Type) cst;
+            int s = t.getSort();
+            if (s == Type.OBJECT) {
+                return newClassItem(t.getInternalName());
+            } else if (s == Type.METHOD) {
+                return newMethodTypeItem(t.getDescriptor());
+            } else { // s == primitive type or array
+                return newClassItem(t.getDescriptor());
             }
-            throw new IllegalArgumentException("value " + o);
+        } else if (cst instanceof Handle) {
+            Handle h = (Handle) cst;
+            return newHandleItem(h.tag, h.owner, h.name, h.desc);
+        } else {
+            throw new IllegalArgumentException("value " + cst);
         }
     }
-    
-    public int newConst(final Object o) {
-        return this.a(o).a;
+
+    /**
+     * Adds a number or string constant to the constant pool of the class being
+     * build. Does nothing if the constant pool already contains a similar item.
+     * <i>This method is intended for {@link Attribute} sub classes, and is
+     * normally not needed by class generators or adapters.</i>
+     *
+     * @param cst
+     *            the value of the constant to be added to the constant pool.
+     *            This parameter must be an {@link Integer}, a {@link Float}, a
+     *            {@link Long}, a {@link Double} or a {@link String}.
+     * @return the index of a new or already existing constant item with the
+     *         given value.
+     */
+    public int newConst(final Object cst) {
+        return newConstItem(cst).index;
     }
-    
-    public int newUTF8(final String s) {
-        this.g.a(1, s, null, null);
-        Item a = this.a(this.g);
-        if (a == null) {
-            this.d.putByte(1).putUTF8(s);
-            a = new Item(this.c++, this.g);
-            this.b(a);
+
+    /**
+     * Adds an UTF8 string to the constant pool of the class being build. Does
+     * nothing if the constant pool already contains a similar item. <i>This
+     * method is intended for {@link Attribute} sub classes, and is normally not
+     * needed by class generators or adapters.</i>
+     *
+     * @param value
+     *            the String value.
+     * @return the index of a new or already existing UTF8 item.
+     */
+    public int newUTF8(final String value) {
+        key.set(UTF8, value, null, null);
+        Item result = get(key);
+        if (result == null) {
+            pool.putByte(UTF8).putUTF8(value);
+            result = new Item(index++, key);
+            put(result);
         }
-        return a.a;
+        return result.index;
     }
-    
-    Item a(final String s) {
-        this.h.a(7, s, null, null);
-        Item a = this.a(this.h);
-        if (a == null) {
-            this.d.b(7, this.newUTF8(s));
-            a = new Item(this.c++, this.h);
-            this.b(a);
+
+    /**
+     * Adds a class reference to the constant pool of the class being build.
+     * Does nothing if the constant pool already contains a similar item.
+     * <i>This method is intended for {@link Attribute} sub classes, and is
+     * normally not needed by class generators or adapters.</i>
+     *
+     * @param value
+     *            the internal name of the class.
+     * @return a new or already existing class reference item.
+     */
+    Item newClassItem(final String value) {
+        key2.set(CLASS, value, null, null);
+        Item result = get(key2);
+        if (result == null) {
+            pool.put12(CLASS, newUTF8(value));
+            result = new Item(index++, key2);
+            put(result);
         }
-        return a;
+        return result;
     }
-    
-    public int newClass(final String s) {
-        return this.a(s).a;
+
+    /**
+     * Adds a class reference to the constant pool of the class being build.
+     * Does nothing if the constant pool already contains a similar item.
+     * <i>This method is intended for {@link Attribute} sub classes, and is
+     * normally not needed by class generators or adapters.</i>
+     *
+     * @param value
+     *            the internal name of the class.
+     * @return the index of a new or already existing class reference item.
+     */
+    public int newClass(final String value) {
+        return newClassItem(value).index;
     }
-    
-    Item c(final String s) {
-        this.h.a(16, s, null, null);
-        Item a = this.a(this.h);
-        if (a == null) {
-            this.d.b(16, this.newUTF8(s));
-            a = new Item(this.c++, this.h);
-            this.b(a);
+
+    /**
+     * Adds a method type reference to the constant pool of the class being
+     * build. Does nothing if the constant pool already contains a similar item.
+     * <i>This method is intended for {@link Attribute} sub classes, and is
+     * normally not needed by class generators or adapters.</i>
+     *
+     * @param methodDesc
+     *            method descriptor of the method type.
+     * @return a new or already existing method type reference item.
+     */
+    Item newMethodTypeItem(final String methodDesc) {
+        key2.set(MTYPE, methodDesc, null, null);
+        Item result = get(key2);
+        if (result == null) {
+            pool.put12(MTYPE, newUTF8(methodDesc));
+            result = new Item(index++, key2);
+            put(result);
         }
-        return a;
+        return result;
     }
-    
-    public int newMethodType(final String s) {
-        return this.c(s).a;
+
+    /**
+     * Adds a method type reference to the constant pool of the class being
+     * build. Does nothing if the constant pool already contains a similar item.
+     * <i>This method is intended for {@link Attribute} sub classes, and is
+     * normally not needed by class generators or adapters.</i>
+     *
+     * @param methodDesc
+     *            method descriptor of the method type.
+     * @return the index of a new or already existing method type reference
+     *         item.
+     */
+    public int newMethodType(final String methodDesc) {
+        return newMethodTypeItem(methodDesc).index;
     }
-    
-    Item a(final int n, final String s, final String s2, final String s3) {
-        this.j.a(20 + n, s, s2, s3);
-        Item a = this.a(this.j);
-        if (a == null) {
-            if (n <= 4) {
-                this.b(15, n, this.newField(s, s2, s3));
+
+    /**
+     * Adds a handle to the constant pool of the class being build. Does nothing
+     * if the constant pool already contains a similar item. <i>This method is
+     * intended for {@link Attribute} sub classes, and is normally not needed by
+     * class generators or adapters.</i>
+     *
+     * @param tag
+     *            the kind of this handle. Must be {@link Opcodes#H_GETFIELD},
+     *            {@link Opcodes#H_GETSTATIC}, {@link Opcodes#H_PUTFIELD},
+     *            {@link Opcodes#H_PUTSTATIC}, {@link Opcodes#H_INVOKEVIRTUAL},
+     *            {@link Opcodes#H_INVOKESTATIC},
+     *            {@link Opcodes#H_INVOKESPECIAL},
+     *            {@link Opcodes#H_NEWINVOKESPECIAL} or
+     *            {@link Opcodes#H_INVOKEINTERFACE}.
+     * @param owner
+     *            the internal name of the field or method owner class.
+     * @param name
+     *            the name of the field or method.
+     * @param desc
+     *            the descriptor of the field or method.
+     * @return a new or an already existing method type reference item.
+     */
+    Item newHandleItem(final int tag, final String owner, final String name,
+                       final String desc) {
+        key4.set(HANDLE_BASE + tag, owner, name, desc);
+        Item result = get(key4);
+        if (result == null) {
+            if (tag <= Opcodes.H_PUTSTATIC) {
+                put112(HANDLE, tag, newField(owner, name, desc));
+            } else {
+                put112(HANDLE,
+                        tag,
+                        newMethod(owner, name, desc,
+                                tag == Opcodes.H_INVOKEINTERFACE));
             }
-            else {
-                this.b(15, n, this.newMethod(s, s2, s3, n == 9));
+            result = new Item(index++, key4);
+            put(result);
+        }
+        return result;
+    }
+
+    /**
+     * Adds a handle to the constant pool of the class being build. Does nothing
+     * if the constant pool already contains a similar item. <i>This method is
+     * intended for {@link Attribute} sub classes, and is normally not needed by
+     * class generators or adapters.</i>
+     *
+     * @param tag
+     *            the kind of this handle. Must be {@link Opcodes#H_GETFIELD},
+     *            {@link Opcodes#H_GETSTATIC}, {@link Opcodes#H_PUTFIELD},
+     *            {@link Opcodes#H_PUTSTATIC}, {@link Opcodes#H_INVOKEVIRTUAL},
+     *            {@link Opcodes#H_INVOKESTATIC},
+     *            {@link Opcodes#H_INVOKESPECIAL},
+     *            {@link Opcodes#H_NEWINVOKESPECIAL} or
+     *            {@link Opcodes#H_INVOKEINTERFACE}.
+     * @param owner
+     *            the internal name of the field or method owner class.
+     * @param name
+     *            the name of the field or method.
+     * @param desc
+     *            the descriptor of the field or method.
+     * @return the index of a new or already existing method type reference
+     *         item.
+     */
+    public int newHandle(final int tag, final String owner, final String name,
+                         final String desc) {
+        return newHandleItem(tag, owner, name, desc).index;
+    }
+
+    /**
+     * Adds an invokedynamic reference to the constant pool of the class being
+     * build. Does nothing if the constant pool already contains a similar item.
+     * <i>This method is intended for {@link Attribute} sub classes, and is
+     * normally not needed by class generators or adapters.</i>
+     *
+     * @param name
+     *            name of the invoked method.
+     * @param desc
+     *            descriptor of the invoke method.
+     * @param bsm
+     *            the bootstrap method.
+     * @param bsmArgs
+     *            the bootstrap method constant arguments.
+     *
+     * @return a new or an already existing invokedynamic type reference item.
+     */
+    Item newInvokeDynamicItem(final String name, final String desc,
+                              final Handle bsm, final Object... bsmArgs) {
+        // cache for performance
+        ByteVector bootstrapMethods = this.bootstrapMethods;
+        if (bootstrapMethods == null) {
+            bootstrapMethods = this.bootstrapMethods = new ByteVector();
+        }
+
+        int position = bootstrapMethods.length; // record current position
+
+        int hashCode = bsm.hashCode();
+        bootstrapMethods.putShort(newHandle(bsm.tag, bsm.owner, bsm.name,
+                bsm.desc));
+
+        int argsLength = bsmArgs.length;
+        bootstrapMethods.putShort(argsLength);
+
+        for (int i = 0; i < argsLength; i++) {
+            Object bsmArg = bsmArgs[i];
+            hashCode ^= bsmArg.hashCode();
+            bootstrapMethods.putShort(newConst(bsmArg));
+        }
+
+        byte[] data = bootstrapMethods.data;
+        int length = (1 + 1 + argsLength) << 1; // (bsm + argCount + arguments)
+        hashCode &= 0x7FFFFFFF;
+        Item result = items[hashCode % items.length];
+        loop: while (result != null) {
+            if (result.type != BSM || result.hashCode != hashCode) {
+                result = result.next;
+                continue;
             }
-            a = new Item(this.c++, this.j);
-            this.b(a);
-        }
-        return a;
-    }
-    
-    public int newHandle(final int n, final String s, final String s2, final String s3) {
-        return this.a(n, s, s2, s3).a;
-    }
-    
-    Item a(final String s, final String s2, final Handle handle, final Object... array) {
-        ByteVector a = this.A;
-        if (a == null) {
-            final ByteVector a2 = new ByteVector();
-            this.A = a2;
-            a = a2;
-        }
-        final int b = a.b;
-        int hashCode = handle.hashCode();
-        a.putShort(this.newHandle(handle.a, handle.b, handle.c, handle.d));
-        final int length = array.length;
-        a.putShort(length);
-        for (final Object o : array) {
-            hashCode ^= o.hashCode();
-            a.putShort(this.newConst(o));
-        }
-        final byte[] a3 = a.a;
-        final int n = 2 + length << 1;
-        final int n2 = hashCode & Integer.MAX_VALUE;
-        Item item = this.e[n2 % this.e.length];
-    Label_0159:
-        while (item != null) {
-            if (item.b == 33 && item.j == n2) {
-                final int c = item.c;
-                for (int j = 0; j < n; ++j) {
-                    if (a3[b + j] != a3[c + j]) {
-                        item = item.k;
-                        continue Label_0159;
-                    }
+
+            // because the data encode the size of the argument
+            // we don't need to test if these size are equals
+            int resultPosition = result.intVal;
+            for (int p = 0; p < length; p++) {
+                if (data[position + p] != data[resultPosition + p]) {
+                    result = result.next;
+                    continue loop;
                 }
-                break;
             }
-            item = item.k;
+            break;
         }
-        int a4;
-        if (item != null) {
-            a4 = item.a;
-            a.b = b;
+
+        int bootstrapMethodIndex;
+        if (result != null) {
+            bootstrapMethodIndex = result.index;
+            bootstrapMethods.length = position; // revert to old position
+        } else {
+            bootstrapMethodIndex = bootstrapMethodsCount++;
+            result = new Item(bootstrapMethodIndex);
+            result.set(position, hashCode);
+            put(result);
         }
-        else {
-            a4 = this.z++;
-            final Item item2 = new Item(a4);
-            item2.a(b, n2);
-            this.b(item2);
+
+        // now, create the InvokeDynamic constant
+        key3.set(name, desc, bootstrapMethodIndex);
+        result = get(key3);
+        if (result == null) {
+            put122(INDY, bootstrapMethodIndex, newNameType(name, desc));
+            result = new Item(index++, key3);
+            put(result);
         }
-        this.i.a(s, s2, a4);
-        Item a5 = this.a(this.i);
-        if (a5 == null) {
-            this.a(18, a4, this.newNameType(s, s2));
-            a5 = new Item(this.c++, this.i);
-            this.b(a5);
+        return result;
+    }
+
+    /**
+     * Adds an invokedynamic reference to the constant pool of the class being
+     * build. Does nothing if the constant pool already contains a similar item.
+     * <i>This method is intended for {@link Attribute} sub classes, and is
+     * normally not needed by class generators or adapters.</i>
+     *
+     * @param name
+     *            name of the invoked method.
+     * @param desc
+     *            descriptor of the invoke method.
+     * @param bsm
+     *            the bootstrap method.
+     * @param bsmArgs
+     *            the bootstrap method constant arguments.
+     *
+     * @return the index of a new or already existing invokedynamic reference
+     *         item.
+     */
+    public int newInvokeDynamic(final String name, final String desc,
+                                final Handle bsm, final Object... bsmArgs) {
+        return newInvokeDynamicItem(name, desc, bsm, bsmArgs).index;
+    }
+
+    /**
+     * Adds a field reference to the constant pool of the class being build.
+     * Does nothing if the constant pool already contains a similar item.
+     *
+     * @param owner
+     *            the internal name of the field's owner class.
+     * @param name
+     *            the field's name.
+     * @param desc
+     *            the field's descriptor.
+     * @return a new or already existing field reference item.
+     */
+    Item newFieldItem(final String owner, final String name, final String desc) {
+        key3.set(FIELD, owner, name, desc);
+        Item result = get(key3);
+        if (result == null) {
+            put122(FIELD, newClass(owner), newNameType(name, desc));
+            result = new Item(index++, key3);
+            put(result);
         }
-        return a5;
+        return result;
     }
-    
-    public int newInvokeDynamic(final String s, final String s2, final Handle handle, final Object... array) {
-        return this.a(s, s2, handle, array).a;
+
+    /**
+     * Adds a field reference to the constant pool of the class being build.
+     * Does nothing if the constant pool already contains a similar item.
+     * <i>This method is intended for {@link Attribute} sub classes, and is
+     * normally not needed by class generators or adapters.</i>
+     *
+     * @param owner
+     *            the internal name of the field's owner class.
+     * @param name
+     *            the field's name.
+     * @param desc
+     *            the field's descriptor.
+     * @return the index of a new or already existing field reference item.
+     */
+    public int newField(final String owner, final String name, final String desc) {
+        return newFieldItem(owner, name, desc).index;
     }
-    
-    Item a(final String s, final String s2, final String s3) {
-        this.i.a(9, s, s2, s3);
-        Item a = this.a(this.i);
-        if (a == null) {
-            this.a(9, this.newClass(s), this.newNameType(s2, s3));
-            a = new Item(this.c++, this.i);
-            this.b(a);
+
+    /**
+     * Adds a method reference to the constant pool of the class being build.
+     * Does nothing if the constant pool already contains a similar item.
+     *
+     * @param owner
+     *            the internal name of the method's owner class.
+     * @param name
+     *            the method's name.
+     * @param desc
+     *            the method's descriptor.
+     * @param itf
+     *            <tt>true</tt> if <tt>owner</tt> is an interface.
+     * @return a new or already existing method reference item.
+     */
+    Item newMethodItem(final String owner, final String name,
+                       final String desc, final boolean itf) {
+        int type = itf ? IMETH : METH;
+        key3.set(type, owner, name, desc);
+        Item result = get(key3);
+        if (result == null) {
+            put122(type, newClass(owner), newNameType(name, desc));
+            result = new Item(index++, key3);
+            put(result);
         }
-        return a;
+        return result;
     }
-    
-    public int newField(final String s, final String s2, final String s3) {
-        return this.a(s, s2, s3).a;
+
+    /**
+     * Adds a method reference to the constant pool of the class being build.
+     * Does nothing if the constant pool already contains a similar item.
+     * <i>This method is intended for {@link Attribute} sub classes, and is
+     * normally not needed by class generators or adapters.</i>
+     *
+     * @param owner
+     *            the internal name of the method's owner class.
+     * @param name
+     *            the method's name.
+     * @param desc
+     *            the method's descriptor.
+     * @param itf
+     *            <tt>true</tt> if <tt>owner</tt> is an interface.
+     * @return the index of a new or already existing method reference item.
+     */
+    public int newMethod(final String owner, final String name,
+                         final String desc, final boolean itf) {
+        return newMethodItem(owner, name, desc, itf).index;
     }
-    
-    Item a(final String s, final String s2, final String s3, final boolean b) {
-        final int n = b ? 11 : 10;
-        this.i.a(n, s, s2, s3);
-        Item a = this.a(this.i);
-        if (a == null) {
-            this.a(n, this.newClass(s), this.newNameType(s2, s3));
-            a = new Item(this.c++, this.i);
-            this.b(a);
+
+    /**
+     * Adds an integer to the constant pool of the class being build. Does
+     * nothing if the constant pool already contains a similar item.
+     *
+     * @param value
+     *            the int value.
+     * @return a new or already existing int item.
+     */
+    Item newInteger(final int value) {
+        key.set(value);
+        Item result = get(key);
+        if (result == null) {
+            pool.putByte(INT).putInt(value);
+            result = new Item(index++, key);
+            put(result);
         }
-        return a;
+        return result;
     }
-    
-    public int newMethod(final String s, final String s2, final String s3, final boolean b) {
-        return this.a(s, s2, s3, b).a;
-    }
-    
-    Item a(final int n) {
-        this.g.a(n);
-        Item a = this.a(this.g);
-        if (a == null) {
-            this.d.putByte(3).putInt(n);
-            a = new Item(this.c++, this.g);
-            this.b(a);
+
+    /**
+     * Adds a float to the constant pool of the class being build. Does nothing
+     * if the constant pool already contains a similar item.
+     *
+     * @param value
+     *            the float value.
+     * @return a new or already existing float item.
+     */
+    Item newFloat(final float value) {
+        key.set(value);
+        Item result = get(key);
+        if (result == null) {
+            pool.putByte(FLOAT).putInt(key.intVal);
+            result = new Item(index++, key);
+            put(result);
         }
-        return a;
+        return result;
     }
-    
-    Item a(final float n) {
-        this.g.a(n);
-        Item a = this.a(this.g);
-        if (a == null) {
-            this.d.putByte(4).putInt(this.g.c);
-            a = new Item(this.c++, this.g);
-            this.b(a);
+
+    /**
+     * Adds a long to the constant pool of the class being build. Does nothing
+     * if the constant pool already contains a similar item.
+     *
+     * @param value
+     *            the long value.
+     * @return a new or already existing long item.
+     */
+    Item newLong(final long value) {
+        key.set(value);
+        Item result = get(key);
+        if (result == null) {
+            pool.putByte(LONG).putLong(value);
+            result = new Item(index, key);
+            index += 2;
+            put(result);
         }
-        return a;
+        return result;
     }
-    
-    Item a(final long n) {
-        this.g.a(n);
-        Item a = this.a(this.g);
-        if (a == null) {
-            this.d.putByte(5).putLong(n);
-            a = new Item(this.c, this.g);
-            this.c += 2;
-            this.b(a);
+
+    /**
+     * Adds a double to the constant pool of the class being build. Does nothing
+     * if the constant pool already contains a similar item.
+     *
+     * @param value
+     *            the double value.
+     * @return a new or already existing double item.
+     */
+    Item newDouble(final double value) {
+        key.set(value);
+        Item result = get(key);
+        if (result == null) {
+            pool.putByte(DOUBLE).putLong(key.longVal);
+            result = new Item(index, key);
+            index += 2;
+            put(result);
         }
-        return a;
+        return result;
     }
-    
-    Item a(final double n) {
-        this.g.a(n);
-        Item a = this.a(this.g);
-        if (a == null) {
-            this.d.putByte(6).putLong(this.g.d);
-            a = new Item(this.c, this.g);
-            this.c += 2;
-            this.b(a);
+
+    /**
+     * Adds a string to the constant pool of the class being build. Does nothing
+     * if the constant pool already contains a similar item.
+     *
+     * @param value
+     *            the String value.
+     * @return a new or already existing string item.
+     */
+    private Item newString(final String value) {
+        key2.set(STR, value, null, null);
+        Item result = get(key2);
+        if (result == null) {
+            pool.put12(STR, newUTF8(value));
+            result = new Item(index++, key2);
+            put(result);
         }
-        return a;
+        return result;
     }
-    
-    private Item b(final String s) {
-        this.h.a(8, s, null, null);
-        Item a = this.a(this.h);
-        if (a == null) {
-            this.d.b(8, this.newUTF8(s));
-            a = new Item(this.c++, this.h);
-            this.b(a);
+
+    /**
+     * Adds a name and type to the constant pool of the class being build. Does
+     * nothing if the constant pool already contains a similar item. <i>This
+     * method is intended for {@link Attribute} sub classes, and is normally not
+     * needed by class generators or adapters.</i>
+     *
+     * @param name
+     *            a name.
+     * @param desc
+     *            a type descriptor.
+     * @return the index of a new or already existing name and type item.
+     */
+    public int newNameType(final String name, final String desc) {
+        return newNameTypeItem(name, desc).index;
+    }
+
+    /**
+     * Adds a name and type to the constant pool of the class being build. Does
+     * nothing if the constant pool already contains a similar item.
+     *
+     * @param name
+     *            a name.
+     * @param desc
+     *            a type descriptor.
+     * @return a new or already existing name and type item.
+     */
+    Item newNameTypeItem(final String name, final String desc) {
+        key2.set(NAME_TYPE, name, desc, null);
+        Item result = get(key2);
+        if (result == null) {
+            put122(NAME_TYPE, newUTF8(name), newUTF8(desc));
+            result = new Item(index++, key2);
+            put(result);
         }
-        return a;
+        return result;
     }
-    
-    public int newNameType(final String s, final String s2) {
-        return this.a(s, s2).a;
-    }
-    
-    Item a(final String s, final String s2) {
-        this.h.a(12, s, s2, null);
-        Item a = this.a(this.h);
-        if (a == null) {
-            this.a(12, this.newUTF8(s), this.newUTF8(s2));
-            a = new Item(this.c++, this.h);
-            this.b(a);
+
+    /**
+     * Adds the given internal name to {@link #typeTable} and returns its index.
+     * Does nothing if the type table already contains this internal name.
+     *
+     * @param type
+     *            the internal name to be added to the type table.
+     * @return the index of this internal name in the type table.
+     */
+    int addType(final String type) {
+        key.set(TYPE_NORMAL, type, null, null);
+        Item result = get(key);
+        if (result == null) {
+            result = addType(key);
         }
-        return a;
+        return result.index;
     }
-    
-    int c(final String s) {
-        this.g.a(30, s, null, null);
-        Item item = this.a(this.g);
-        if (item == null) {
-            item = this.c(this.g);
+
+    /**
+     * Adds the given "uninitialized" type to {@link #typeTable} and returns its
+     * index. This method is used for UNINITIALIZED types, made of an internal
+     * name and a bytecode offset.
+     *
+     * @param type
+     *            the internal name to be added to the type table.
+     * @param offset
+     *            the bytecode offset of the NEW instruction that created this
+     *            UNINITIALIZED type value.
+     * @return the index of this internal name in the type table.
+     */
+    int addUninitializedType(final String type, final int offset) {
+        key.type = TYPE_UNINIT;
+        key.intVal = offset;
+        key.strVal1 = type;
+        key.hashCode = 0x7FFFFFFF & (TYPE_UNINIT + type.hashCode() + offset);
+        Item result = get(key);
+        if (result == null) {
+            result = addType(key);
         }
-        return item.a;
+        return result.index;
     }
-    
-    int a(final String g, final int c) {
-        this.g.b = 31;
-        this.g.c = c;
-        this.g.g = g;
-        this.g.j = (Integer.MAX_VALUE & 31 + g.hashCode() + c);
-        Item item = this.a(this.g);
-        if (item == null) {
-            item = this.c(this.g);
+
+    /**
+     * Adds the given Item to {@link #typeTable}.
+     *
+     * @param item
+     *            the value to be added to the type table.
+     * @return the added Item, which a new Item instance with the same value as
+     *         the given Item.
+     */
+    private Item addType(final Item item) {
+        ++typeCount;
+        Item result = new Item(typeCount, key);
+        put(result);
+        if (typeTable == null) {
+            typeTable = new Item[16];
         }
-        return item.a;
+        if (typeCount == typeTable.length) {
+            Item[] newTable = new Item[2 * typeTable.length];
+            System.arraycopy(typeTable, 0, newTable, 0, typeTable.length);
+            typeTable = newTable;
+        }
+        typeTable[typeCount] = result;
+        return result;
     }
-    
-    private Item c(final Item item) {
-        ++this.G;
-        final Item item2 = new Item(this.G, this.g);
-        this.b(item2);
-        if (this.H == null) {
-            this.H = new Item[16];
+
+    /**
+     * Returns the index of the common super type of the two given types. This
+     * method calls {@link #getCommonSuperClass} and caches the result in the
+     * {@link #items} hash table to speedup future calls with the same
+     * parameters.
+     *
+     * @param type1
+     *            index of an internal name in {@link #typeTable}.
+     * @param type2
+     *            index of an internal name in {@link #typeTable}.
+     * @return the index of the common super type of the two given types.
+     */
+    int getMergedType(final int type1, final int type2) {
+        key2.type = TYPE_MERGED;
+        key2.longVal = type1 | (((long) type2) << 32);
+        key2.hashCode = 0x7FFFFFFF & (TYPE_MERGED + type1 + type2);
+        Item result = get(key2);
+        if (result == null) {
+            String t = typeTable[type1].strVal1;
+            String u = typeTable[type2].strVal1;
+            key2.intVal = addType(getCommonSuperClass(t, u));
+            result = new Item((short) 0, key2);
+            put(result);
         }
-        if (this.G == this.H.length) {
-            final Item[] h = new Item[2 * this.H.length];
-            System.arraycopy(this.H, 0, h, 0, this.H.length);
-            this.H = h;
-        }
-        return this.H[this.G] = item2;
+        return result.intVal;
     }
-    
-    int a(final int n, final int n2) {
-        this.h.b = 32;
-        this.h.d = (n | n2 << 32);
-        this.h.j = (Integer.MAX_VALUE & 32 + n + n2);
-        Item a = this.a(this.h);
-        if (a == null) {
-            this.h.c = this.c(this.getCommonSuperClass(this.H[n].g, this.H[n2].g));
-            a = new Item(0, this.h);
-            this.b(a);
-        }
-        return a.c;
-    }
-    
-    protected String getCommonSuperClass(final String s, final String s2) {
-        final ClassLoader classLoader = this.getClass().getClassLoader();
-        Class<?> clazz;
-        Class<?> forName;
+
+    /**
+     * Returns the common super type of the two given types. The default
+     * implementation of this method <i>loads</i> the two given classes and uses
+     * the java.lang.Class methods to find the common super class. It can be
+     * overridden to compute this common super type in other ways, in particular
+     * without actually loading any class, or to take into account the class
+     * that is currently being generated by this ClassWriter, which can of
+     * course not be loaded since it is under construction.
+     *
+     * @param type1
+     *            the internal name of a class.
+     * @param type2
+     *            the internal name of another class.
+     * @return the internal name of the common super class of the two given
+     *         classes.
+     */
+    protected String getCommonSuperClass(final String type1, final String type2) {
+        Class<?> c, d;
+        ClassLoader classLoader = getClass().getClassLoader();
         try {
-            clazz = Class.forName(s.replace('/', '.'), false, classLoader);
-            forName = Class.forName(s2.replace('/', '.'), false, classLoader);
+            c = Class.forName(type1.replace('/', '.'), false, classLoader);
+            d = Class.forName(type2.replace('/', '.'), false, classLoader);
+        } catch (Exception e) {
+            throw new RuntimeException(e.toString());
         }
-        catch (Exception ex) {
-            throw new RuntimeException(ex.toString());
+        if (c.isAssignableFrom(d)) {
+            return type1;
         }
-        if (clazz.isAssignableFrom(forName)) {
-            return s;
+        if (d.isAssignableFrom(c)) {
+            return type2;
         }
-        if (forName.isAssignableFrom(clazz)) {
-            return s2;
-        }
-        if (clazz.isInterface() || forName.isInterface()) {
+        if (c.isInterface() || d.isInterface()) {
             return "java/lang/Object";
+        } else {
+            do {
+                c = c.getSuperclass();
+            } while (!c.isAssignableFrom(d));
+            return c.getName().replace('.', '/');
         }
-        do {
-            clazz = clazz.getSuperclass();
-        } while (!clazz.isAssignableFrom(forName));
-        return clazz.getName().replace('.', '/');
     }
-    
-    private Item a(final Item item) {
-        Item k;
-        for (k = this.e[item.j % this.e.length]; k != null && (k.b != item.b || !item.a(k)); k = k.k) {}
-        return k;
+
+    /**
+     * Returns the constant pool's hash table item which is equal to the given
+     * item.
+     *
+     * @param key
+     *            a constant pool item.
+     * @return the constant pool's hash table item which is equal to the given
+     *         item, or <tt>null</tt> if there is no such item.
+     */
+    private Item get(final Item key) {
+        Item i = items[key.hashCode % items.length];
+        while (i != null && (i.type != key.type || !key.isEqualTo(i))) {
+            i = i.next;
+        }
+        return i;
     }
-    
-    private void b(final Item item) {
-        if (this.c + this.G > this.f) {
-            final int length = this.e.length;
-            final int n = length * 2 + 1;
-            final Item[] e = new Item[n];
-            for (int i = length - 1; i >= 0; --i) {
-                Item k;
-                for (Item item2 = this.e[i]; item2 != null; item2 = k) {
-                    final int n2 = item2.j % e.length;
-                    k = item2.k;
-                    item2.k = e[n2];
-                    e[n2] = item2;
+
+    /**
+     * Puts the given item in the constant pool's hash table. The hash table
+     * <i>must</i> not already contains this item.
+     *
+     * @param i
+     *            the item to be added to the constant pool's hash table.
+     */
+    private void put(final Item i) {
+        if (index + typeCount > threshold) {
+            int ll = items.length;
+            int nl = ll * 2 + 1;
+            Item[] newItems = new Item[nl];
+            for (int l = ll - 1; l >= 0; --l) {
+                Item j = items[l];
+                while (j != null) {
+                    int index = j.hashCode % newItems.length;
+                    Item k = j.next;
+                    j.next = newItems[index];
+                    newItems[index] = j;
+                    j = k;
                 }
             }
-            this.e = e;
-            this.f = (int)(n * 0.75);
+            items = newItems;
+            threshold = (int) (nl * 0.75);
         }
-        final int n3 = item.j % this.e.length;
-        item.k = this.e[n3];
-        this.e[n3] = item;
+        int index = i.hashCode % items.length;
+        i.next = items[index];
+        items[index] = i;
     }
-    
-    private void a(final int n, final int n2, final int n3) {
-        this.d.b(n, n2).putShort(n3);
+
+    /**
+     * Puts one byte and two shorts into the constant pool.
+     *
+     * @param b
+     *            a byte.
+     * @param s1
+     *            a short.
+     * @param s2
+     *            another short.
+     */
+    private void put122(final int b, final int s1, final int s2) {
+        pool.put12(b, s1).putShort(s2);
     }
-    
-    private void b(final int n, final int n2, final int n3) {
-        this.d.a(n, n2).putShort(n3);
-    }
-    
-    static {
-        _clinit_();
-        final byte[] a2 = new byte[220];
-        final String s = "AAAAAAAAAAAAAAAABCLMMDDDDDEEEEEEEEEEEEEEEEEEEEAAAAAAAADDDDDEEEEEEEEEEEEEEEEEEEEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANAAAAAAAAAAAAAAAAAAAAJJJJJJJJJJJJJJJJDOPAAAAAAGGGGGGGHIFBFAAFFAARQJJKKJJJJJJJJJJJJJJJJJJ";
-        for (int i = 0; i < a2.length; ++i) {
-            a2[i] = (byte)(s.charAt(i) - 'A');
-        }
-        a = a2;
-    }
-    
-    static /* synthetic */ void _clinit_() {
+
+    /**
+     * Puts two bytes and one short into the constant pool.
+     *
+     * @param b1
+     *            a byte.
+     * @param b2
+     *            another byte.
+     * @param s
+     *            a short.
+     */
+    private void put112(final int b1, final int b2, final int s) {
+        pool.put11(b1, b2).putShort(s);
     }
 }

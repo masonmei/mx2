@@ -105,7 +105,7 @@ public class AgentConfigFactory
     }
     
     private static boolean isHighSecurity(final Object value) {
-        return value != null && value instanceof Boolean && (boolean)value;
+        return value != null && value instanceof Boolean && (Boolean)value;
     }
     
     private static void mergeAgentData(final Map<String, Object> settings, final Map<String, Object> agentData) {
@@ -124,7 +124,7 @@ public class AgentConfigFactory
         final String[] propArray = arr$ = prop.split("\\.");
         for (final String propPart : arr$) {
             if (++count < propArray.length) {
-                Map<String, Object> propMap = currentMap.get(propPart);
+                Map<String, Object> propMap = (Map<String, Object>) currentMap.get(propPart);
                 if (propMap == null) {
                     propMap = createMap();
                     currentMap.put(propPart, propMap);

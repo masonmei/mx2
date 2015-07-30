@@ -190,7 +190,7 @@ public class RPMService extends AbstractService implements IRPMService, Environm
             throw new UnexpectedException(MessageFormat.format("Missing the following connection parameters", requiredParams.removeAll(data.keySet())));
         }
         Agent.LOG.log(Level.INFO, "Agent {0} connected to {1}", new Object[] { this.toString(), this.getHostString() });
-        this.transactionNamingScheme = data.get("transaction_name.naming_scheme");
+        this.transactionNamingScheme = (String) data.get("transaction_name.naming_scheme");
         if (this.transactionNamingScheme != null) {
             this.transactionNamingScheme = this.transactionNamingScheme.intern();
             Agent.LOG.log(Level.INFO, "Setting: {0} to: {1}", new Object[] { "transaction_name.naming_scheme", this.transactionNamingScheme });
@@ -211,7 +211,7 @@ public class RPMService extends AbstractService implements IRPMService, Environm
     }
     
     private void logCollectorMessages(final Map<String, Object> data) {
-        final List<Map<String, String>> messages = data.get("messages");
+        final List<Map<String, String>> messages = (List<Map<String, String>>) data.get("messages");
         if (messages != null) {
             for (final Map<String, String> message : messages) {
                 final String level = message.get("level");
@@ -722,7 +722,7 @@ public class RPMService extends AbstractService implements IRPMService, Environm
             final JSONObject jsonObj = JSONObject.class.cast(response.get(0));
             final MetricName metricName = MetricName.parseJSON(jsonObj);
             final Long id = Long.class.cast(response.get(1));
-            this.metricIdRegistry.setMetricId(metricName, (int)(Object)id);
+            this.metricIdRegistry.setMetricId(metricName, id.intValue());
         }
     }
     

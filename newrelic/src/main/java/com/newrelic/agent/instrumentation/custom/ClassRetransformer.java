@@ -19,7 +19,7 @@ public class ClassRetransformer
     
     public ClassRetransformer(final InstrumentationContextManager contextManager) {
         this.contextManager = contextManager;
-        this.matchers = (Set<ClassMatchVisitorFactory>)Sets.newHashSet();
+        this.matchers = Sets.newHashSet();
     }
     
     public synchronized void setClassMethodMatchers(final List<ExtensionClassAndMethodMatcher> newMatchers) {

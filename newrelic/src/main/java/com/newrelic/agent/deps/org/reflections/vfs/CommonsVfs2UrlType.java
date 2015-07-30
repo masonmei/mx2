@@ -19,7 +19,7 @@ import com.newrelic.agent.deps.org.apache.commons.vfs2.FileObject;
 
 public interface CommonsVfs2UrlType
 {
-    public static class Dir implements Vfs.Dir
+    class Dir implements Vfs.Dir
     {
         private final FileObject file;
         
@@ -28,12 +28,11 @@ public interface CommonsVfs2UrlType
         }
         
         public String getPath() {
-            FileSystemException e;
             try {
                 return this.file.getURL().getPath();
             }
             catch (FileSystemException e) {
-                throw new RuntimeException((Throwable)e);
+                throw new RuntimeException(e);
             }
         }
         
@@ -63,7 +62,6 @@ public interface CommonsVfs2UrlType
             
             protected Vfs.File computeNext() {
                 FileObject file;
-                FileSystemException e;
                 while (!this.stack.isEmpty()) {
                     file = this.stack.pop();
                     try {
@@ -73,7 +71,7 @@ public interface CommonsVfs2UrlType
                         this.listDir(file);
                     }
                     catch (FileSystemException e) {
-                        throw new RuntimeException((Throwable)e);
+                        throw new RuntimeException(e);
                     }
                 }
                 return this.endOfData();
@@ -84,7 +82,7 @@ public interface CommonsVfs2UrlType
             }
             
             private boolean listDir(FileObject file) {
-                return this.stack.addAll((Collection<?>)this.listFiles(file));
+                return this.stack.addAll(this.listFiles(file));
             }
             
             private boolean isDir(FileObject file) throws FileSystemException {
@@ -93,19 +91,18 @@ public interface CommonsVfs2UrlType
             
             protected List<FileObject> listFiles(FileObject file) {
                 FileObject[] files;
-                FileSystemException e;
                 try {
-                    files = (FileObject[])(file.getType().hasChildren() ? file.getChildren() : null);
+                    files = file.getType().hasChildren() ? file.getChildren() : null;
                     return (files != null) ? Arrays.asList(files) : new ArrayList<FileObject>();
                 }
                 catch (FileSystemException e) {
-                    throw new RuntimeException((Throwable)e);
+                    throw new RuntimeException(e);
                 }
             }
         }
     }
     
-    public static class File implements Vfs.File
+    class File implements Vfs.File
     {
         private final FileObject root;
         private final FileObject file;

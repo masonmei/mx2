@@ -39,7 +39,7 @@ public final class TypeResolver
     }
     
     public TypeResolver where(final Type formal, final Type actual) {
-        final Map<TypeVariableKey, Type> mappings = (Map<TypeVariableKey, Type>)Maps.newHashMap();
+        final Map<TypeVariableKey, Type> mappings = Maps.newHashMap();
         populateTypeMappings(mappings, Preconditions.checkNotNull(formal), Preconditions.checkNotNull(actual));
         return this.where(mappings);
     }
@@ -60,7 +60,7 @@ public final class TypeResolver
             
             @Override
             void visitWildcardType(final WildcardType fromWildcardType) {
-                final WildcardType toWildcardType = (WildcardType)expectArgument((Class<Object>)WildcardType.class, to);
+                final WildcardType toWildcardType = expectArgument(WildcardType.class, to);
                 final Type[] fromUpperBounds = fromWildcardType.getUpperBounds();
                 final Type[] toUpperBounds = toWildcardType.getUpperBounds();
                 final Type[] fromLowerBounds = fromWildcardType.getLowerBounds();
@@ -76,7 +76,7 @@ public final class TypeResolver
             
             @Override
             void visitParameterizedType(final ParameterizedType fromParameterizedType) {
-                final ParameterizedType toParameterizedType = (ParameterizedType)expectArgument((Class<Object>)ParameterizedType.class, to);
+                final ParameterizedType toParameterizedType = expectArgument(ParameterizedType.class, to);
                 Preconditions.checkArgument(fromParameterizedType.getRawType().equals(toParameterizedType.getRawType()), "Inconsistent raw type: %s vs. %s", fromParameterizedType, to);
                 final Type[] fromArgs = fromParameterizedType.getActualTypeArguments();
                 final Type[] toArgs = toParameterizedType.getActualTypeArguments();
@@ -197,13 +197,13 @@ public final class TypeResolver
         Type resolveInternal(final TypeVariable<?> var, final TypeTable forDependants) {
             final Type type = this.map.get(new TypeVariableKey(var));
             if (type != null) {
-                return new TypeResolver(forDependants, null).resolveType(type);
+                return new TypeResolver(forDependants).resolveType(type);
             }
             final Type[] bounds = var.getBounds();
             if (bounds.length == 0) {
                 return var;
             }
-            final Type[] resolvedBounds = new TypeResolver(forDependants, null).resolveTypes(bounds);
+            final Type[] resolvedBounds = new TypeResolver(forDependants).resolveTypes(bounds);
             if (Types.NativeTypeVariableEquals.NATIVE_TYPE_VARIABLE_ONLY && Arrays.equals(bounds, resolvedBounds)) {
                 return var;
             }
@@ -217,13 +217,13 @@ public final class TypeResolver
         private final Map<TypeVariableKey, Type> mappings;
         
         private TypeMappingIntrospector() {
-            this.mappings = (Map<TypeVariableKey, Type>)Maps.newHashMap();
+            this.mappings = Maps.newHashMap();
         }
         
         static ImmutableMap<TypeVariableKey, Type> getTypeMappings(final Type contextType) {
             final TypeMappingIntrospector introspector = new TypeMappingIntrospector();
             introspector.visit(TypeMappingIntrospector.wildcardCapturer.capture(contextType));
-            return ImmutableMap.copyOf((Map<? extends TypeVariableKey, ? extends Type>)introspector.mappings);
+            return ImmutableMap.copyOf(introspector.mappings);
         }
         
         @Override

@@ -24,7 +24,7 @@ public final class SymbolTable extends HashMap
     }
     
     public Declarator lookup(final String name) {
-        final Declarator found = this.get(name);
+        final Declarator found = (Declarator) this.get(name);
         if (found == null && this.parent != null) {
             return this.parent.lookup(name);
         }

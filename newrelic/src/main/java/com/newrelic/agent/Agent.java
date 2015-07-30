@@ -228,7 +228,22 @@ public final class Agent extends AbstractService implements IAgent
         Agent.agentPremainTime = System.currentTimeMillis() - BootstrapAgent.getAgentStartTime();
         Agent.LOG.log(Level.INFO, "Premain startup complete in {0}ms", new Object[] { Agent.agentPremainTime });
         statsService.doStatsWork(StatsWorks.getRecordResponseTimeWork("Supportability/Timing/Premain", Agent.agentPremainTime));
-        final Map<String, Object> environmentInfo = (Map<String, Object>)ImmutableMap.builder().put("Duration", Agent.agentPremainTime).put("Version", (Long)getVersion()).put("JRE Vendor", (Long)System.getProperty("java.vendor")).put("JRE Version", (Long)System.getProperty("java.version")).put("JVM Vendor", (Long)System.getProperty("java.vm.vendor")).put("JVM Version", (Long)System.getProperty("java.vm.version")).put("JVM Runtime Version", (Long)System.getProperty("java.runtime.version")).put("OS Name", (Long)System.getProperty("os.name")).put("OS Version", (Long)System.getProperty("os.version")).put("OS Arch", (Long)System.getProperty("os.arch")).put("Processors", (Long)Runtime.getRuntime().availableProcessors()).put("Free Memory", Runtime.getRuntime().freeMemory()).put("Total Memory", Runtime.getRuntime().totalMemory()).put("Max Memory", Runtime.getRuntime().maxMemory()).build();
+        final Map<String, Object> environmentInfo = ImmutableMap.<String, Object>builder()
+                .put("Duration", Agent.agentPremainTime)
+                .put("Version", getVersion())
+                .put("JRE Vendor", System.getProperty("java.vendor"))
+                .put("JRE Version", System.getProperty("java.version"))
+                .put("JVM Vendor", System.getProperty("java.vm.vendor"))
+                .put("JVM Version", System.getProperty("java.vm.version"))
+                .put("JVM Runtime Version", System.getProperty("java.runtime.version"))
+                .put("OS Name", System.getProperty("os.name"))
+                .put("OS Version", System.getProperty("os.version"))
+                .put("OS Arch", System.getProperty("os.arch"))
+                .put("Processors", Runtime.getRuntime().availableProcessors())
+                .put("Free Memory", Runtime.getRuntime().freeMemory())
+                .put("Total Memory", Runtime.getRuntime().totalMemory())
+                .put("Max Memory", Runtime.getRuntime().maxMemory())
+                .build();
         Agent.LOG.log(Level.FINE, "Premain environment info: {0}", new Object[] { environmentInfo.toString() });
     }
     

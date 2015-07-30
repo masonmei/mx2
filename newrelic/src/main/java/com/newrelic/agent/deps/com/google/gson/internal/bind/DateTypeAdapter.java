@@ -55,7 +55,7 @@ public final class DateTypeAdapter extends TypeAdapter<Date>
             try {
                 return this.enUsFormat.parse(json);
             }
-            catch (ParseException ignored) {
+            catch (ParseException ignored2) {
                 try {
                     return this.iso8601Format.parse(json);
                 }

@@ -335,7 +335,7 @@ class MergeMethodVisitor extends MethodNode
         if (endIndex < 0) {
             return Collections.emptyList();
         }
-        final List<LocalVariableNode> locals = (List<LocalVariableNode>)Lists.newArrayList();
+        final List<LocalVariableNode> locals = Lists.<LocalVariableNode>newArrayList();
         for (final LocalVariableNode local : this.localVariables) {
             final int startIndex = this.instructions.indexOf(local.start);
             final int end = this.instructions.indexOf(local.end);

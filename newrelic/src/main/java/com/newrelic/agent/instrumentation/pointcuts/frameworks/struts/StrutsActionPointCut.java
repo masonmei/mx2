@@ -8,6 +8,7 @@ import java.text.MessageFormat;
 import com.newrelic.agent.bridge.TransactionNamePriority;
 import java.util.logging.Level;
 import com.newrelic.agent.Agent;
+import com.newrelic.agent.instrumentation.PointCut;
 import com.newrelic.agent.transaction.TransactionNamingPolicy;
 import com.newrelic.agent.tracers.metricname.MetricNameFormat;
 import com.newrelic.agent.tracers.metricname.SimpleMetricNameFormat;
@@ -19,7 +20,6 @@ import com.newrelic.agent.instrumentation.classmatchers.ClassMatcher;
 import com.newrelic.agent.instrumentation.classmatchers.ChildClassMatcher;
 import com.newrelic.agent.instrumentation.ClassTransformer;
 import com.newrelic.agent.instrumentation.methodmatchers.MethodMatcher;
-import com.newrelic.agent.instrumentation.pointcuts.PointCut;
 import com.newrelic.agent.instrumentation.TracerFactoryPointCut;
 
 @com.newrelic.agent.instrumentation.pointcuts.PointCut

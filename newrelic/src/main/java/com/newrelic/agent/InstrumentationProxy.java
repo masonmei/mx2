@@ -77,7 +77,7 @@ public class InstrumentationProxy extends InstrumentationWrapper
     }
     
     public static void forceRedefinition(final Instrumentation instrumentation, final Class<?>... classes) throws ClassNotFoundException, UnmodifiableClassException {
-        final List<ClassDefinition> toRedefine = (List<ClassDefinition>)Lists.newArrayList();
+        final List<ClassDefinition> toRedefine = Lists.newArrayList();
         for (final Class<?> clazz : classes) {
             final String classResourceName = Utils.getClassResourceName(clazz);
             URL resource = clazz.getResource(classResourceName);

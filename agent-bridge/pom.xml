@@ -11,5 +11,11 @@
 
     <artifactId>agent-bridge</artifactId>
 
-
+    <dependencies>
+        <dependency>
+            <groupId>com.newrelic</groupId>
+            <artifactId>newrelic-api</artifactId>
+            <version>${parent.version}</version>
+        </dependency>
+    </dependencies>
 </project>

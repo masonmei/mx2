@@ -104,7 +104,7 @@ public final class LoggerFactory
         Util.report("during the default configuration phase of the underlying logging system.");
         Util.report("See also http://www.slf4j.org/codes.html#substituteLogger");
         for (int i = 0; i < loggerNameList.size(); ++i) {
-            final String loggerName = loggerNameList.get(i);
+            final String loggerName = (String) loggerNameList.get(i);
             Util.report(loggerName);
         }
     }
@@ -141,7 +141,7 @@ public final class LoggerFactory
                 paths = loggerFactoryClassLoader.getResources(LoggerFactory.STATIC_LOGGER_BINDER_PATH);
             }
             while (paths.hasMoreElements()) {
-                final URL path = paths.nextElement();
+                final URL path = (URL) paths.nextElement();
                 staticLoggerBinderPathSet.add(path);
             }
         }
@@ -155,7 +155,7 @@ public final class LoggerFactory
         return staticLoggerBinderPathSet.size() > 1;
     }
     
-    private static void reportMultipleBindingAmbiguity(final Set staticLoggerBinderPathSet) {
+    private static void reportMultipleBindingAmbiguity(final Set<URL> staticLoggerBinderPathSet) {
         if (isAmbiguousStaticLoggerBinderPathSet(staticLoggerBinderPathSet)) {
             Util.report("Class path contains multiple SLF4J bindings.");
             for (final URL path : staticLoggerBinderPathSet) {

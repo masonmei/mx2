@@ -87,12 +87,12 @@ public class TransactionEventsService extends AbstractService implements Service
         final List<TransactionEvent> reservoirToSend = this.reservoirForApp.put(appName, new ReserviorSampledArrayList<TransactionEvent>(this.maxSamplesStored));
         if (reservoirToSend != null && reservoirToSend.size() > 0) {
             try {
-                ServiceFactory.getRPMService(appName).sendAnalyticsEvents((Collection<TransactionEvent>)Collections.unmodifiableList((List<?>)reservoirToSend));
+                ServiceFactory.getRPMService(appName).sendAnalyticsEvents(Collections.unmodifiableList(reservoirToSend));
             }
             catch (Exception e) {
                 Agent.LOG.fine("Unable to send events for regular transactions. This operation will be retried.");
                 final ReserviorSampledArrayList<TransactionEvent> currentReservoir = this.reservoirForApp.get(appName);
-                currentReservoir.addAll((Collection<?>)reservoirToSend);
+                currentReservoir.addAll(reservoirToSend);
             }
         }
     }
@@ -114,7 +114,7 @@ public class TransactionEventsService extends AbstractService implements Service
                 break;
             }
             try {
-                ServiceFactory.getRPMService(appName).sendAnalyticsEvents((Collection<TransactionEvent>)Collections.unmodifiableList((List<?>)toSend));
+                ServiceFactory.getRPMService(appName).sendAnalyticsEvents(Collections.unmodifiableList(toSend));
                 ++nSent;
             }
             catch (Exception e) {

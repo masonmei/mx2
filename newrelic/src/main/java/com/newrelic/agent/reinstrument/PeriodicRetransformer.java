@@ -32,7 +32,7 @@ public class PeriodicRetransformer implements Runnable
         if (classList.isEmpty()) {
             return;
         }
-        final Set<Class<?>> classSet = (Set<Class<?>>)Sets.newHashSet((Iterable<?>)classList);
+        final Set<Class<?>> classSet = Sets.newHashSet(classList);
         try {
             ServiceFactory.getAgent().getInstrumentation().retransformClasses((Class<?>[])classSet.toArray(new Class[0]));
         }

@@ -154,7 +154,7 @@ abstract class AbstractStreamingHashFunction implements HashFunction
         
         @Override
         public final <T> Hasher putObject(final T instance, final Funnel<? super T> funnel) {
-            funnel.funnel((Object)instance, (PrimitiveSink)this);
+            funnel.funnel(instance, (PrimitiveSink)this);
             return this;
         }
         

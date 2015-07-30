@@ -118,9 +118,9 @@ public class ClassStructure
         if (cv != null) {
             cr.accept(cv, 1);
         }
-        structure.methods = ((structure.methods == null) ? Collections.emptyMap() : Collections.unmodifiableMap((Map<? extends Method, ? extends MethodDetails>)structure.methods));
-        structure.classAnnotations = ((structure.classAnnotations == null) ? Collections.emptyMap() : Collections.unmodifiableMap((Map<? extends String, ? extends AnnotationDetails>)structure.classAnnotations));
-        structure.fields = ((structure.fields == null) ? Collections.emptyMap() : Collections.unmodifiableMap((Map<? extends String, ? extends FieldNode>)structure.fields));
+        structure.methods = (structure.methods == null) ? Collections.<Method, MethodDetails>emptyMap() : Collections.unmodifiableMap(structure.methods);
+        structure.classAnnotations = (structure.classAnnotations == null) ? Collections.<String, AnnotationDetails>emptyMap() : Collections.unmodifiableMap(structure.classAnnotations);
+        structure.fields = (structure.fields == null) ?  Collections.<String, FieldNode>emptyMap() : Collections.unmodifiableMap(structure.fields);
         return structure;
     }
     
@@ -153,12 +153,12 @@ public class ClassStructure
             cv = new ClassVisitor(327680, cv) {
                 public MethodVisitor visitMethod(final int access, final String name, final String desc, final String signature, final String[] exceptions) {
                     if (null == ClassStructure.this.methods) {
-                        ClassStructure.this.methods = (Map<Method, MethodDetails>)Maps.newHashMap();
+                        ClassStructure.this.methods = Maps.newHashMap();
                     }
                     final boolean isStatic = (access & 0x8) == 0x8;
                     final Method method = new Method(name, desc);
                     if ((flags & 0x8) == 0x8) {
-                        final MethodDetails details = new MethodDetails((Map<String, AnnotationDetails>)Maps.newHashMap(), isStatic);
+                        final MethodDetails details = new MethodDetails(Maps.<String, AnnotationDetails>newHashMap(), isStatic);
                         ClassStructure.this.methods.put(method, details);
                         return new MethodVisitor(327680, super.visitMethod(access, name, desc, signature, exceptions)) {
                             public AnnotationVisitor visitAnnotation(final String desc, final boolean visible) {
@@ -177,7 +177,7 @@ public class ClassStructure
             cv = new ClassVisitor(327680, cv) {
                 public AnnotationVisitor visitAnnotation(final String desc, final boolean visible) {
                     if (null == ClassStructure.this.classAnnotations) {
-                        ClassStructure.this.classAnnotations = (Map<String, AnnotationDetails>)Maps.newHashMap();
+                        ClassStructure.this.classAnnotations = Maps.newHashMap();
                     }
                     final AnnotationDetails annotation = new AnnotationDetails(super.visitAnnotation(desc, visible), desc);
                     ClassStructure.this.classAnnotations.put(desc, annotation);
@@ -190,7 +190,7 @@ public class ClassStructure
                 public FieldVisitor visitField(final int access, final String name, final String desc, final String signature, final Object value) {
                     final FieldNode field = new FieldNode(access, name, desc, signature, value);
                     if (ClassStructure.this.fields == null) {
-                        ClassStructure.this.fields = (Map<String, FieldNode>)Maps.newHashMap();
+                        ClassStructure.this.fields = Maps.newHashMap();
                     }
                     ClassStructure.this.fields.put(name, field);
                     return super.visitField(access, name, desc, signature, value);
@@ -253,7 +253,7 @@ public class ClassStructure
         if ((flags & 0x4) == 0x4) {
             final Annotation[] annotations = clazz.getAnnotations();
             if (annotations.length > 0) {
-                structure.classAnnotations = (Map<String, AnnotationDetails>)Maps.newHashMap();
+                structure.classAnnotations = Maps.newHashMap();
                 for (final Annotation annotation : annotations) {
                     final AnnotationDetails annotationDetails = getAnnotationDetails(annotation);
                     structure.classAnnotations.put(annotationDetails.desc, annotationDetails);
@@ -264,7 +264,7 @@ public class ClassStructure
             structure.classAnnotations = Collections.emptyMap();
         }
         if (isFieldFlagSet(flags)) {
-            structure.fields = (Map<String, FieldNode>)Maps.newHashMap();
+            structure.fields = Maps.newHashMap();
             final Field[] arr$2;
             final Field[] declaredFields = arr$2 = ClassReflection.getDeclaredFields((Class)clazz);
             for (final Field f : arr$2) {
@@ -273,12 +273,12 @@ public class ClassStructure
             }
         }
         else {
-            structure.fields = (Map<String, FieldNode>)ImmutableMap.of();
+            structure.fields = ImmutableMap.of();
         }
         if (isMethodFlagSet(flags)) {
-            structure.methods = (Map<Method, MethodDetails>)Maps.newHashMap();
+            structure.methods = Maps.newHashMap();
             try {
-                AccessController.doPrivileged((PrivilegedExceptionAction<Object>)new PrivilegedExceptionAction<Object>() {
+                AccessController.doPrivileged(new PrivilegedExceptionAction<Object>() {
                     public Object run() throws Exception {
                         final java.lang.reflect.Method[] arr$;
                         final java.lang.reflect.Method[] methods = arr$ = ClassReflection.getDeclaredMethods(clazz);
@@ -321,7 +321,7 @@ public class ClassStructure
     
     private static MethodDetails getMethodDetails(final AccessibleObject method, final int flags, final boolean isStatic) {
         if ((flags & 0x8) == 0x8) {
-            final MethodDetails details = new MethodDetails((Map<String, AnnotationDetails>)Maps.newHashMap(), isStatic);
+            final MethodDetails details = new MethodDetails(Maps.<String, AnnotationDetails>newHashMap(), isStatic);
             for (final Annotation annotation : method.getAnnotations()) {
                 final AnnotationDetails annotationDetails = getAnnotationDetails(annotation);
                 details.annotations.put(annotationDetails.desc, annotationDetails);
@@ -348,8 +348,8 @@ public class ClassStructure
     }
     
     static {
-        EMPTY_METHOD_DEFAULTS_MEMBER = new MethodDetails((Map<String, AnnotationDetails>)ImmutableMap.of(), false);
-        EMPTY_METHOD_DEFAULTS_STATIC = new MethodDetails((Map<String, AnnotationDetails>)ImmutableMap.of(), true);
+        EMPTY_METHOD_DEFAULTS_MEMBER = new MethodDetails(ImmutableMap.<String, AnnotationDetails>of(), false);
+        EMPTY_METHOD_DEFAULTS_STATIC = new MethodDetails(ImmutableMap.<String, AnnotationDetails>of(), true);
     }
     
     private static class MethodDetails

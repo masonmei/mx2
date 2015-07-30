@@ -55,7 +55,7 @@ public class TransactionSegment implements JSONStreamAware
         this.metricName = getMetricName(tracer);
         this.uri = getUri(tracer);
         if (childSegment == null) {
-            this.children = (List<TransactionSegment>)Lists.newArrayList();
+            this.children = Lists.newArrayList();
         }
         else {
             (this.children = new ArrayList<TransactionSegment>(1)).add(childSegment);
@@ -163,7 +163,7 @@ public class TransactionSegment implements JSONStreamAware
     }
     
     private void processStackTraces(final Map<String, Object> params) {
-        final List<StackTraceElement> backtrace = params.remove("backtrace");
+        final List<StackTraceElement> backtrace = (List<StackTraceElement>) params.remove("backtrace");
         if (backtrace != null) {
             final List<StackTraceElement> preStackTraces = StackTraces.scrubAndTruncate(backtrace);
             final List<String> postParentRemovalTrace = StackTraces.toStringListRemoveParent(preStackTraces, this.parentStackTrace);

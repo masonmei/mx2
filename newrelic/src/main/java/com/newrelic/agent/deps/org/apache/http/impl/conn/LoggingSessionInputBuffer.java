@@ -23,7 +23,7 @@ public class LoggingSessionInputBuffer implements SessionInputBuffer, EofSensor
     
     public LoggingSessionInputBuffer(final SessionInputBuffer in, final Wire wire, final String charset) {
         this.in = in;
-        this.eofSensor = ((in instanceof EofSensor) ? in : null);
+        this.eofSensor = ((in instanceof EofSensor) ? (EofSensor)in : null);
         this.wire = wire;
         this.charset = ((charset != null) ? charset : Consts.ASCII.name());
     }

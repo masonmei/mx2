@@ -1,42 +1,61 @@
-// 
-// Decompiled by Procyon v0.5.29
-// 
+/*
+ * Copyright (C) 2011 Google Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package com.newrelic.agent.deps.com.google.gson.internal;
 
-import java.util.LinkedHashMap;
-import java.util.TreeMap;
-import java.util.SortedMap;
-import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.Queue;
-import java.util.LinkedHashSet;
-import java.util.Set;
-import com.newrelic.agent.deps.com.google.gson.JsonIOException;
-import java.lang.reflect.ParameterizedType;
-import java.util.EnumSet;
-import java.util.TreeSet;
-import java.util.SortedSet;
-import java.util.Collection;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Constructor;
-import com.newrelic.agent.deps.com.google.gson.reflect.TypeToken;
 import com.newrelic.agent.deps.com.google.gson.InstanceCreator;
-import java.lang.reflect.Type;
-import java.util.Map;
+import com.newrelic.agent.deps.com.google.gson.JsonIOException;
+import com.newrelic.agent.deps.com.google.gson.reflect.TypeToken;
 
-public final class ConstructorConstructor
-{
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.EnumSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.LinkedList;
+import java.util.Map;
+import java.util.Queue;
+import java.util.Set;
+import java.util.SortedMap;
+import java.util.SortedSet;
+import java.util.TreeMap;
+import java.util.TreeSet;
+
+/**
+ * Returns a function that can construct an instance of a requested type.
+ */
+public final class ConstructorConstructor {
     private final Map<Type, InstanceCreator<?>> instanceCreators;
-    
-    public ConstructorConstructor(final Map<Type, InstanceCreator<?>> instanceCreators) {
+
+    public ConstructorConstructor(Map<Type, InstanceCreator<?>> instanceCreators) {
         this.instanceCreators = instanceCreators;
     }
-    
-    public <T> ObjectConstructor<T> get(final TypeToken<T> typeToken) {
+
+    public <T> ObjectConstructor<T> get(TypeToken<T> typeToken) {
         final Type type = typeToken.getType();
         final Class<? super T> rawType = typeToken.getRawType();
-        final InstanceCreator<T> typeCreator = (InstanceCreator<T>)this.instanceCreators.get(type);
+
+        // first try an instance creator
+
+        @SuppressWarnings("unchecked") // types must agree
+        final InstanceCreator<T> typeCreator = (InstanceCreator<T>) instanceCreators.get(type);
         if (typeCreator != null) {
             return new ObjectConstructor<T>() {
                 public T construct() {
@@ -44,7 +63,11 @@ public final class ConstructorConstructor
                 }
             };
         }
-        final InstanceCreator<T> rawTypeCreator = (InstanceCreator<T>)this.instanceCreators.get(rawType);
+
+        // Next try raw type match for instance creators
+        @SuppressWarnings("unchecked") // types must agree
+        final InstanceCreator<T> rawTypeCreator =
+                (InstanceCreator<T>) instanceCreators.get(rawType);
         if (rawTypeCreator != null) {
             return new ObjectConstructor<T>() {
                 public T construct() {
@@ -52,132 +75,146 @@ public final class ConstructorConstructor
                 }
             };
         }
-        final ObjectConstructor<T> defaultConstructor = this.newDefaultConstructor(rawType);
+
+        ObjectConstructor<T> defaultConstructor = newDefaultConstructor(rawType);
         if (defaultConstructor != null) {
             return defaultConstructor;
         }
-        final ObjectConstructor<T> defaultImplementation = this.newDefaultImplementationConstructor(type, rawType);
+
+        ObjectConstructor<T> defaultImplementation = newDefaultImplementationConstructor(type, rawType);
         if (defaultImplementation != null) {
             return defaultImplementation;
         }
-        return this.newUnsafeAllocator(type, rawType);
+
+        // finally try unsafe
+        return newUnsafeAllocator(type, rawType);
     }
-    
-    private <T> ObjectConstructor<T> newDefaultConstructor(final Class<? super T> rawType) {
+
+    private <T> ObjectConstructor<T> newDefaultConstructor(Class<? super T> rawType) {
         try {
-            final Constructor<? super T> constructor = rawType.getDeclaredConstructor((Class<?>[])new Class[0]);
+            final Constructor<? super T> constructor = rawType.getDeclaredConstructor();
             if (!constructor.isAccessible()) {
                 constructor.setAccessible(true);
             }
             return new ObjectConstructor<T>() {
+                @SuppressWarnings("unchecked") // T is the same raw type as is requested
                 public T construct() {
                     try {
-                        final Object[] args = null;
-                        return constructor.newInstance(args);
-                    }
-                    catch (InstantiationException e) {
+                        Object[] args = null;
+                        return (T) constructor.newInstance(args);
+                    } catch (InstantiationException e) {
+                        // TODO: JsonParseException ?
                         throw new RuntimeException("Failed to invoke " + constructor + " with no args", e);
-                    }
-                    catch (InvocationTargetException e2) {
-                        throw new RuntimeException("Failed to invoke " + constructor + " with no args", e2.getTargetException());
-                    }
-                    catch (IllegalAccessException e3) {
-                        throw new AssertionError((Object)e3);
+                    } catch (InvocationTargetException e) {
+                        // TODO: don't wrap if cause is unchecked!
+                        // TODO: JsonParseException ?
+                        throw new RuntimeException("Failed to invoke " + constructor + " with no args",
+                                e.getTargetException());
+                    } catch (IllegalAccessException e) {
+                        throw new AssertionError(e);
                     }
                 }
             };
-        }
-        catch (NoSuchMethodException e) {
+        } catch (NoSuchMethodException e) {
             return null;
         }
     }
-    
-    private <T> ObjectConstructor<T> newDefaultImplementationConstructor(final Type type, final Class<? super T> rawType) {
+
+    /**
+     * Constructors for common interface types like Map and List and their
+     * subytpes.
+     */
+    @SuppressWarnings("unchecked") // use runtime checks to guarantee that 'T' is what it is
+    private <T> ObjectConstructor<T> newDefaultImplementationConstructor(
+            final Type type, Class<? super T> rawType) {
         if (Collection.class.isAssignableFrom(rawType)) {
             if (SortedSet.class.isAssignableFrom(rawType)) {
                 return new ObjectConstructor<T>() {
                     public T construct() {
-                        return (T)new TreeSet();
+                        return (T) new TreeSet<Object>();
                     }
                 };
-            }
-            if (EnumSet.class.isAssignableFrom(rawType)) {
+            } else if (EnumSet.class.isAssignableFrom(rawType)) {
                 return new ObjectConstructor<T>() {
+                    @SuppressWarnings("rawtypes")
                     public T construct() {
-                        if (!(type instanceof ParameterizedType)) {
+                        if (type instanceof ParameterizedType) {
+                            Type elementType = ((ParameterizedType) type).getActualTypeArguments()[0];
+                            if (elementType instanceof Class) {
+                                return (T) EnumSet.noneOf((Class)elementType);
+                            } else {
+                                throw new JsonIOException("Invalid EnumSet type: " + type.toString());
+                            }
+                        } else {
                             throw new JsonIOException("Invalid EnumSet type: " + type.toString());
                         }
-                        final Type elementType = ((ParameterizedType)type).getActualTypeArguments()[0];
-                        if (elementType instanceof Class) {
-                            return (T)EnumSet.noneOf((Class<Enum>)elementType);
-                        }
-                        throw new JsonIOException("Invalid EnumSet type: " + type.toString());
                     }
                 };
-            }
-            if (Set.class.isAssignableFrom(rawType)) {
+            } else if (Set.class.isAssignableFrom(rawType)) {
                 return new ObjectConstructor<T>() {
                     public T construct() {
-                        return (T)new LinkedHashSet();
+                        return (T) new LinkedHashSet<Object>();
                     }
                 };
-            }
-            if (Queue.class.isAssignableFrom(rawType)) {
+            } else if (Queue.class.isAssignableFrom(rawType)) {
                 return new ObjectConstructor<T>() {
                     public T construct() {
-                        return (T)new LinkedList();
+                        return (T) new LinkedList<Object>();
+                    }
+                };
+            } else {
+                return new ObjectConstructor<T>() {
+                    public T construct() {
+                        return (T) new ArrayList<Object>();
                     }
                 };
             }
-            return new ObjectConstructor<T>() {
-                public T construct() {
-                    return (T)new ArrayList();
-                }
-            };
         }
-        else {
-            if (!Map.class.isAssignableFrom(rawType)) {
-                return null;
-            }
+
+        if (Map.class.isAssignableFrom(rawType)) {
             if (SortedMap.class.isAssignableFrom(rawType)) {
                 return new ObjectConstructor<T>() {
                     public T construct() {
-                        return (T)new TreeMap();
+                        return (T) new TreeMap<Object, Object>();
                     }
                 };
-            }
-            if (type instanceof ParameterizedType && !String.class.isAssignableFrom(TypeToken.get(((ParameterizedType)type).getActualTypeArguments()[0]).getRawType())) {
+            } else if (type instanceof ParameterizedType && !(String.class.isAssignableFrom(
+                    TypeToken.get(((ParameterizedType) type).getActualTypeArguments()[0]).getRawType()))) {
                 return new ObjectConstructor<T>() {
                     public T construct() {
-                        return (T)new LinkedHashMap();
+                        return (T) new LinkedHashMap<Object, Object>();
+                    }
+                };
+            } else {
+                return new ObjectConstructor<T>() {
+                    public T construct() {
+                        return (T) new LinkedTreeMap<String, Object>();
                     }
                 };
             }
-            return new ObjectConstructor<T>() {
-                public T construct() {
-                    return (T)new LinkedTreeMap();
-                }
-            };
         }
+
+        return null;
     }
-    
-    private <T> ObjectConstructor<T> newUnsafeAllocator(final Type type, final Class<? super T> rawType) {
+
+    private <T> ObjectConstructor<T> newUnsafeAllocator(
+            final Type type, final Class<? super T> rawType) {
         return new ObjectConstructor<T>() {
             private final UnsafeAllocator unsafeAllocator = UnsafeAllocator.create();
-            
+            @SuppressWarnings("unchecked")
             public T construct() {
                 try {
-                    final Object newInstance = this.unsafeAllocator.newInstance(rawType);
-                    return (T)newInstance;
-                }
-                catch (Exception e) {
-                    throw new RuntimeException("Unable to invoke no-args constructor for " + type + ". " + "Register an InstanceCreator with Gson for this type may fix this problem.", e);
+                    Object newInstance = unsafeAllocator.newInstance(rawType);
+                    return (T) newInstance;
+                } catch (Exception e) {
+                    throw new RuntimeException(("Unable to invoke no-args constructor for " + type + ". "
+                            + "Register an InstanceCreator with Gson for this type may fix this problem."), e);
                 }
             }
         };
     }
-    
-    public String toString() {
-        return this.instanceCreators.toString();
+
+    @Override public String toString() {
+        return instanceCreators.toString();
     }
 }

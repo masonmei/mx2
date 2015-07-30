@@ -4,7 +4,6 @@
 
 package com.newrelic.agent.instrumentation.classmatchers;
 
-import java.util.Iterator;
 import com.newrelic.agent.deps.org.objectweb.asm.AnnotationVisitor;
 import com.newrelic.agent.deps.org.objectweb.asm.MethodVisitor;
 import com.newrelic.agent.deps.com.google.common.collect.Sets;
@@ -38,16 +37,16 @@ public final class OptimizedClassMatcher implements ClassMatchVisitorFactory
     static final Supplier<Set<String>> STRING_COLLECTION_SUPPLIER;
     
     private OptimizedClassMatcher() {
-        this.methodAnnotationsToMatch = (Set<String>)ImmutableSet.of();
+        this.methodAnnotationsToMatch = ImmutableSet.of();
         this.methodMatchers = (Map.Entry<MethodMatcher, ClassAndMethodMatcher>[])new Map.Entry[0];
-        this.methods = (Map<Method, Collection<ClassAndMethodMatcher>>)ImmutableMap.of();
+        this.methods = ImmutableMap.of();
     }
     
     protected OptimizedClassMatcher(final Set<String> annotationMatchers, final SetMultimap<Method, ClassAndMethodMatcher> methods, final SetMultimap<MethodMatcher, ClassAndMethodMatcher> methodMatchers, final Set<String> exactClassNames) {
-        this.methodAnnotationsToMatch = (Set<String>)ImmutableSet.copyOf((Collection<?>)annotationMatchers);
+        this.methodAnnotationsToMatch = ImmutableSet.copyOf(annotationMatchers);
         this.methodMatchers = methodMatchers.entries().toArray(new Map.Entry[0]);
-        this.methods = (Map<Method, Collection<ClassAndMethodMatcher>>)ImmutableMap.copyOf((Map<?, ?>)methods.asMap());
-        this.exactClassNames = (Set<String>)((exactClassNames == null) ? null : ImmutableSet.copyOf((Collection<?>)exactClassNames));
+        this.methods = ImmutableMap.copyOf(methods.asMap());
+        this.exactClassNames = ((exactClassNames == null) ? null : ImmutableSet.copyOf(exactClassNames));
     }
     
     public ClassVisitor newClassMatchVisitor(final ClassLoader loader, final Class<?> classBeingRedefined, final ClassReader reader, final ClassVisitor cv, final InstrumentationContext context) {
@@ -58,7 +57,7 @@ public final class OptimizedClassMatcher implements ClassMatchVisitorFactory
     }
     
     private Multimap<ClassAndMethodMatcher, String> newClassMatches() {
-        return (Multimap<ClassAndMethodMatcher, String>)Multimaps.newSetMultimap((Map<Object, Collection<Object>>)Maps.newHashMap(), (Supplier<? extends Set<Object>>)OptimizedClassMatcher.STRING_COLLECTION_SUPPLIER);
+        return Multimaps.newSetMultimap(Maps.<ClassAndMethodMatcher, Collection<String>>newHashMap(), OptimizedClassMatcher.STRING_COLLECTION_SUPPLIER);
     }
     
     public String toString() {
@@ -71,7 +70,7 @@ public final class OptimizedClassMatcher implements ClassMatchVisitorFactory
         DEFAULT_CONSTRUCTOR = new Method("<init>", "()V");
         STRING_COLLECTION_SUPPLIER = new Supplier<Set<String>>() {
             public Set<String> get() {
-                return (Set<String>)Sets.newHashSet();
+                return Sets.newHashSet();
             }
         };
     }
@@ -83,8 +82,8 @@ public final class OptimizedClassMatcher implements ClassMatchVisitorFactory
         private final Map<Method, Set<String>> methodAnnotations;
         
         public Match(final Multimap<ClassAndMethodMatcher, String> classMatches, final Set<Method> methods, final Map<Method, Set<String>> methodAnnotations) {
-            this.classNames = (Map<ClassAndMethodMatcher, Collection<String>>)ImmutableMap.copyOf((Map<?, ?>)classMatches.asMap());
-            this.methods = (Set<Method>)ImmutableSet.copyOf((Collection<?>)methods);
+            this.classNames = ImmutableMap.copyOf(classMatches.asMap());
+            this.methods = ImmutableSet.copyOf(methods);
             this.methodAnnotations = (Map<Method, Set<String>>)((methodAnnotations == null) ? ImmutableMap.of() : methodAnnotations);
         }
         
@@ -131,7 +130,7 @@ public final class OptimizedClassMatcher implements ClassMatchVisitorFactory
         private void addMethodAnnotations(final Method method, final Set<String> annotations) {
             if (!annotations.isEmpty()) {
                 if (this.methodAnnotations == null) {
-                    this.methodAnnotations = (Map<Method, Set<String>>)Maps.newHashMap();
+                    this.methodAnnotations = Maps.newHashMap();
                 }
                 this.methodAnnotations.put(method, annotations);
             }
@@ -139,9 +138,9 @@ public final class OptimizedClassMatcher implements ClassMatchVisitorFactory
         
         private SetMultimap<Method, ClassAndMethodMatcher> getOrCreateMatches() {
             if (this.matches == null) {
-                this.matches = Multimaps.newSetMultimap((Map<Method, Collection<ClassAndMethodMatcher>>)Maps.newHashMap(), new Supplier<Set<ClassAndMethodMatcher>>() {
+                this.matches = Multimaps.newSetMultimap(Maps.<Method, Collection<ClassAndMethodMatcher>>newHashMap(), new Supplier<Set<ClassAndMethodMatcher>>() {
                     public Set<ClassAndMethodMatcher> get() {
-                        return (Set<ClassAndMethodMatcher>)Sets.newHashSet();
+                        return Sets.newHashSet();
                     }
                 });
             }
@@ -150,7 +149,7 @@ public final class OptimizedClassMatcher implements ClassMatchVisitorFactory
         
         private boolean isMatch(final ClassMatcher classMatcher, final ClassLoader loader, final ClassReader cr, final Class<?> classBeingRedefined) {
             if (null == this.classMatcherMatches) {
-                this.classMatcherMatches = (Map<ClassMatcher, Boolean>)Maps.newHashMap();
+                this.classMatcherMatches = Maps.newHashMap();
             }
             Boolean match = this.classMatcherMatches.get(classMatcher);
             if (match == null) {
@@ -187,7 +186,7 @@ public final class OptimizedClassMatcher implements ClassMatchVisitorFactory
                         }
                     };
                 }
-                else if (this.addMethodIfMatches(access, method, (Set<String>)ImmutableSet.of()) && (access & 0x40) != 0x0) {
+                else if (this.addMethodIfMatches(access, method, ImmutableSet.<String>of()) && (access & 0x40) != 0x0) {
                     this.context.addBridgeMethod(method);
                 }
             }

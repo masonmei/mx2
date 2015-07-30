@@ -57,7 +57,7 @@ public class CustomClassTransformer implements ContextClassTransformer
     }
     
     private void addMatchesToTraces(final InstrumentationContext pContext, final OptimizedClassMatcher.Match match) {
-        final Collection<ExtensionClassAndMethodMatcher> matches = (Collection<ExtensionClassAndMethodMatcher>)Lists.newArrayList((Iterable<?>)this.extensionPointCuts);
+        final Collection<ExtensionClassAndMethodMatcher> matches = Lists.newArrayList(this.extensionPointCuts);
         matches.retainAll(match.getClassMatches().keySet());
         if (!matches.isEmpty()) {
             for (final ExtensionClassAndMethodMatcher pc : matches) {

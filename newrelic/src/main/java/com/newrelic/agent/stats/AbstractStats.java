@@ -45,7 +45,7 @@ public abstract class AbstractStats implements CountStats
             list = AbstractStats.ZERO_ARRAY_LIST;
         }
         else {
-            list = Arrays.asList(this.count, this.getTotal(), this.getTotalExclusiveTime(), this.getMinCallTime(), this.getMaxCallTime(), this.getSumOfSquares());
+            list = Arrays.<Number>asList(this.count, this.getTotal(), this.getTotalExclusiveTime(), this.getMinCallTime(), this.getMaxCallTime(), this.getSumOfSquares());
         }
         JSONArray.writeJSONString(list, writer);
     }

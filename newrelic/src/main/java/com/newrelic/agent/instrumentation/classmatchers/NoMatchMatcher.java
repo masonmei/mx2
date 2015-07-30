@@ -21,7 +21,7 @@ public class NoMatchMatcher extends ClassMatcher
     }
     
     public Collection<String> getClassNames() {
-        return (Collection<String>)Collections.emptyList();
+        return Collections.emptyList();
     }
     
     public int hashCode() {

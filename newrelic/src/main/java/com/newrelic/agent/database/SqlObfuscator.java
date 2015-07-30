@@ -53,7 +53,7 @@ public abstract class SqlObfuscator
         private static final Pattern DIGIT_PATTERN;
         
         DefaultSqlObfuscator() {
-            super(null);
+            super();
         }
         
         public String obfuscateSql(String sql) {
@@ -82,7 +82,7 @@ public abstract class SqlObfuscator
         private final SqlObfuscator sqlObfuscator;
         
         public CachingSqlObfuscator(final SqlObfuscator sqlObfuscator) {
-            super(null);
+            super();
             this.cache = new HashMap<String, String>();
             this.sqlObfuscator = sqlObfuscator;
         }

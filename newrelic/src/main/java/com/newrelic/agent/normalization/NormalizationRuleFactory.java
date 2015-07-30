@@ -196,25 +196,25 @@ public class NormalizationRuleFactory
     }
     
     private static NormalizationRule createRule(final Map<String, Object> ruleData) {
-        Boolean eachSegment = ruleData.get("each_segment");
+        Boolean eachSegment = (Boolean) ruleData.get("each_segment");
         if (eachSegment == null) {
             eachSegment = Boolean.FALSE;
         }
-        Boolean replaceAll = ruleData.get("replace_all");
+        Boolean replaceAll = (Boolean) ruleData.get("replace_all");
         if (replaceAll == null) {
             replaceAll = Boolean.FALSE;
         }
-        Boolean ignore = ruleData.get("ignore");
+        Boolean ignore = (Boolean) ruleData.get("ignore");
         if (ignore == null) {
             ignore = Boolean.FALSE;
         }
-        Boolean terminateChain = ruleData.get("terminate_chain");
+        Boolean terminateChain = (Boolean) ruleData.get("terminate_chain");
         if (terminateChain == null) {
             terminateChain = Boolean.TRUE;
         }
-        final int order = ruleData.get("eval_order").intValue();
-        final String matchExpression = ruleData.get("match_expression");
-        final String replacement = ruleData.get("replacement");
+        final int order = (Integer)ruleData.get("eval_order");
+        final String matchExpression = (String) ruleData.get("match_expression");
+        final String replacement = (String) ruleData.get("replacement");
         return new NormalizationRule(matchExpression, replacement, ignore, order, terminateChain, eachSegment, replaceAll);
     }
     
@@ -225,11 +225,11 @@ public class NormalizationRuleFactory
             list = Collections.emptyList();
         }
         else {
-            list = (List<TransactionSegmentTerms>)Lists.newArrayList();
+            list = Lists.newArrayList();
             for (final Map map : segmentTerms) {
-                final List<String> terms = map.get("terms");
-                final String prefix = map.get("prefix");
-                final TransactionSegmentTerms tst = new TransactionSegmentTerms(prefix, (Set<String>)ImmutableSet.copyOf((Collection<?>)terms));
+                final List<String> terms = (List<String>) map.get("terms");
+                final String prefix = (String) map.get("prefix");
+                final TransactionSegmentTerms tst = new TransactionSegmentTerms(prefix, ImmutableSet.copyOf(terms));
                 list.add(tst);
             }
         }

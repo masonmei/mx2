@@ -1,1019 +1,1147 @@
-// 
-// Decompiled by Procyon v0.5.29
-// 
+/*
+ * Javassist, a Java-bytecode translator toolkit.
+ * Copyright (C) 1999- Shigeru Chiba. All Rights Reserved.
+ *
+ * The contents of this file are subject to the Mozilla Public License Version
+ * 1.1 (the "License"); you may not use this file except in compliance with
+ * the License.  Alternatively, the contents of this file may be used under
+ * the terms of the GNU Lesser General Public License Version 2.1 or later,
+ * or the Apache License Version 2.0.
+ *
+ * Software distributed under the License is distributed on an "AS IS" basis,
+ * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
+ * for the specific language governing rights and limitations under the
+ * License.
+ */
 
 package com.newrelic.agent.deps.javassist.compiler;
 
-import com.newrelic.agent.deps.javassist.compiler.ast.MethodDecl;
-import com.newrelic.agent.deps.javassist.bytecode.ConstPool;
-import com.newrelic.agent.deps.javassist.bytecode.FieldInfo;
-import com.newrelic.agent.deps.javassist.CtField;
-import com.newrelic.agent.deps.javassist.NotFoundException;
-import com.newrelic.agent.deps.javassist.Modifier;
-import com.newrelic.agent.deps.javassist.bytecode.Descriptor;
-import com.newrelic.agent.deps.javassist.bytecode.AccessFlag;
-import com.newrelic.agent.deps.javassist.compiler.ast.Symbol;
-import com.newrelic.agent.deps.javassist.compiler.ast.Expr;
-import com.newrelic.agent.deps.javassist.compiler.ast.Keyword;
-import com.newrelic.agent.deps.javassist.compiler.ast.Member;
-import com.newrelic.agent.deps.javassist.compiler.ast.CallExpr;
-import com.newrelic.agent.deps.javassist.compiler.ast.ASTree;
-import com.newrelic.agent.deps.javassist.compiler.ast.ArrayInit;
-import com.newrelic.agent.deps.javassist.compiler.ast.NewExpr;
-import com.newrelic.agent.deps.javassist.compiler.ast.Declarator;
-import com.newrelic.agent.deps.javassist.compiler.ast.Pair;
-import com.newrelic.agent.deps.javassist.compiler.ast.Visitor;
-import java.util.ArrayList;
-import com.newrelic.agent.deps.javassist.compiler.ast.ASTList;
-import com.newrelic.agent.deps.javassist.compiler.ast.Stmnt;
-import com.newrelic.agent.deps.javassist.CtMethod;
-import com.newrelic.agent.deps.javassist.bytecode.ClassFile;
-import com.newrelic.agent.deps.javassist.ClassPool;
-import com.newrelic.agent.deps.javassist.bytecode.Bytecode;
-import com.newrelic.agent.deps.javassist.bytecode.MethodInfo;
-import com.newrelic.agent.deps.javassist.CtClass;
+import com.newrelic.agent.deps.javassist.*;
+import com.newrelic.agent.deps.javassist.bytecode.*;
+import com.newrelic.agent.deps.javassist.compiler.ast.*;
 
-public class MemberCodeGen extends CodeGen
-{
+import java.util.ArrayList;
+
+/* Code generator methods depending on javassist.* classes.
+ */
+public class MemberCodeGen extends CodeGen {
     protected MemberResolver resolver;
-    protected CtClass thisClass;
+    protected CtClass   thisClass;
     protected MethodInfo thisMethod;
+
     protected boolean resultStatic;
-    
-    public MemberCodeGen(final Bytecode b, final CtClass cc, final ClassPool cp) {
+
+    public MemberCodeGen(Bytecode b, CtClass cc, ClassPool cp) {
         super(b);
-        this.resolver = new MemberResolver(cp);
-        this.thisClass = cc;
-        this.thisMethod = null;
+        resolver = new MemberResolver(cp);
+        thisClass = cc;
+        thisMethod = null;
     }
-    
+
+    /**
+     * Returns the major version of the class file
+     * targeted by this compilation.
+     */
     public int getMajorVersion() {
-        final ClassFile cf = this.thisClass.getClassFile2();
-        if (cf == null) {
-            return ClassFile.MAJOR_VERSION;
-        }
-        return cf.getMajorVersion();
+        ClassFile cf = thisClass.getClassFile2();
+        if (cf == null)
+            return ClassFile.MAJOR_VERSION;     // JDK 1.3
+        else
+            return cf.getMajorVersion();
     }
-    
-    public void setThisMethod(final CtMethod m) {
-        this.thisMethod = m.getMethodInfo2();
-        if (this.typeChecker != null) {
-            this.typeChecker.setThisMethod(this.thisMethod);
-        }
+
+    /**
+     * Records the currently compiled method.
+     */
+    public void setThisMethod(CtMethod m) {
+        thisMethod = m.getMethodInfo2();
+        if (typeChecker != null)
+            typeChecker.setThisMethod(thisMethod);
     }
-    
-    public CtClass getThisClass() {
-        return this.thisClass;
-    }
-    
-    @Override
+
+    public CtClass getThisClass() { return thisClass; }
+
+    /**
+     * Returns the JVM-internal representation of this class name.
+     */
     protected String getThisName() {
-        return MemberResolver.javaToJvmName(this.thisClass.getName());
+        return MemberResolver.javaToJvmName(thisClass.getName());
     }
-    
-    @Override
+
+    /**
+     * Returns the JVM-internal representation of this super class name.
+     */
     protected String getSuperName() throws CompileError {
-        return MemberResolver.javaToJvmName(MemberResolver.getSuperclass(this.thisClass).getName());
+        return MemberResolver.javaToJvmName(
+                MemberResolver.getSuperclass(thisClass).getName());
     }
-    
-    @Override
+
     protected void insertDefaultSuperCall() throws CompileError {
-        this.bytecode.addAload(0);
-        this.bytecode.addInvokespecial(MemberResolver.getSuperclass(this.thisClass), "<init>", "()V");
+        bytecode.addAload(0);
+        bytecode.addInvokespecial(MemberResolver.getSuperclass(thisClass),
+                "<init>", "()V");
     }
-    
-    @Override
-    protected void atTryStmnt(final Stmnt st) throws CompileError {
-        final Bytecode bc = this.bytecode;
-        final Stmnt body = (Stmnt)st.getLeft();
-        if (body == null) {
+
+    static class JsrHook extends ReturnHook {
+        ArrayList jsrList;
+        CodeGen cgen;
+        int var;
+
+        JsrHook(CodeGen gen) {
+            super(gen);
+            jsrList = new ArrayList();
+            cgen = gen;
+            var = -1;
+        }
+
+        private int getVar(int size) {
+            if (var < 0) {
+                var = cgen.getMaxLocals();
+                cgen.incMaxLocals(size);
+            }
+
+            return var;
+        }
+
+        private void jsrJmp(Bytecode b) {
+            b.addOpcode(Opcode.GOTO);
+            jsrList.add(new int[] {b.currentPc(), var});
+            b.addIndex(0);
+        }
+
+        protected boolean doit(Bytecode b, int opcode) {
+            switch (opcode) {
+                case Opcode.RETURN :
+                    jsrJmp(b);
+                    break;
+                case ARETURN :
+                    b.addAstore(getVar(1));
+                    jsrJmp(b);
+                    b.addAload(var);
+                    break;
+                case IRETURN :
+                    b.addIstore(getVar(1));
+                    jsrJmp(b);
+                    b.addIload(var);
+                    break;
+                case LRETURN :
+                    b.addLstore(getVar(2));
+                    jsrJmp(b);
+                    b.addLload(var);
+                    break;
+                case DRETURN :
+                    b.addDstore(getVar(2));
+                    jsrJmp(b);
+                    b.addDload(var);
+                    break;
+                case FRETURN :
+                    b.addFstore(getVar(1));
+                    jsrJmp(b);
+                    b.addFload(var);
+                    break;
+                default :
+                    throw new RuntimeException("fatal");
+            }
+
+            return false;
+        }
+    }
+
+    static class JsrHook2 extends ReturnHook {
+        int var;
+        int target;
+
+        JsrHook2(CodeGen gen, int[] retTarget) {
+            super(gen);
+            target = retTarget[0];
+            var = retTarget[1];
+        }
+
+        protected boolean doit(Bytecode b, int opcode) {
+            switch (opcode) {
+                case Opcode.RETURN :
+                    break;
+                case ARETURN :
+                    b.addAstore(var);
+                    break;
+                case IRETURN :
+                    b.addIstore(var);
+                    break;
+                case LRETURN :
+                    b.addLstore(var);
+                    break;
+                case DRETURN :
+                    b.addDstore(var);
+                    break;
+                case FRETURN :
+                    b.addFstore(var);
+                    break;
+                default :
+                    throw new RuntimeException("fatal");
+            }
+
+            b.addOpcode(Opcode.GOTO);
+            b.addIndex(target - b.currentPc() + 3);
+            return true;
+        }
+    }
+
+    protected void atTryStmnt(Stmnt st) throws CompileError {
+        Bytecode bc = bytecode;
+        Stmnt body = (Stmnt)st.getLeft();
+        if (body == null)
             return;
-        }
+
         ASTList catchList = (ASTList)st.getRight().getLeft();
-        final Stmnt finallyBlock = (Stmnt)st.getRight().getRight().getLeft();
-        final ArrayList gotoList = new ArrayList();
+        Stmnt finallyBlock = (Stmnt)st.getRight().getRight().getLeft();
+        ArrayList gotoList = new ArrayList();
+
         JsrHook jsrHook = null;
-        if (finallyBlock != null) {
+        if (finallyBlock != null)
             jsrHook = new JsrHook(this);
-        }
-        final int start = bc.currentPc();
+
+        int start = bc.currentPc();
         body.accept(this);
-        final int end = bc.currentPc();
-        if (start == end) {
+        int end = bc.currentPc();
+        if (start == end)
             throw new CompileError("empty try block");
-        }
-        boolean tryNotReturn = !this.hasReturned;
+
+        boolean tryNotReturn = !hasReturned;
         if (tryNotReturn) {
-            bc.addOpcode(167);
+            bc.addOpcode(Opcode.GOTO);
             gotoList.add(new Integer(bc.currentPc()));
-            bc.addIndex(0);
+            bc.addIndex(0);   // correct later
         }
-        final int var = this.getMaxLocals();
-        this.incMaxLocals(1);
+
+        int var = getMaxLocals();
+        incMaxLocals(1);
         while (catchList != null) {
-            final Pair p = (Pair)catchList.head();
+            // catch clause
+            Pair p = (Pair)catchList.head();
             catchList = catchList.tail();
-            final Declarator decl = (Declarator)p.getLeft();
-            final Stmnt block = (Stmnt)p.getRight();
+            Declarator decl = (Declarator)p.getLeft();
+            Stmnt block = (Stmnt)p.getRight();
+
             decl.setLocalVar(var);
-            final CtClass type = this.resolver.lookupClassByJvmName(decl.getClassName());
+
+            CtClass type = resolver.lookupClassByJvmName(decl.getClassName());
             decl.setClassName(MemberResolver.javaToJvmName(type.getName()));
             bc.addExceptionHandler(start, end, bc.currentPc(), type);
             bc.growStack(1);
             bc.addAstore(var);
-            this.hasReturned = false;
-            if (block != null) {
+            hasReturned = false;
+            if (block != null)
                 block.accept(this);
-            }
-            if (!this.hasReturned) {
-                bc.addOpcode(167);
+
+            if (!hasReturned) {
+                bc.addOpcode(Opcode.GOTO);
                 gotoList.add(new Integer(bc.currentPc()));
-                bc.addIndex(0);
+                bc.addIndex(0);   // correct later
                 tryNotReturn = true;
             }
         }
+
         if (finallyBlock != null) {
             jsrHook.remove(this);
-            final int pcAnyCatch = bc.currentPc();
+            // catch (any) clause
+            int pcAnyCatch = bc.currentPc();
             bc.addExceptionHandler(start, pcAnyCatch, pcAnyCatch, 0);
             bc.growStack(1);
             bc.addAstore(var);
-            this.hasReturned = false;
+            hasReturned = false;
             finallyBlock.accept(this);
-            if (!this.hasReturned) {
+            if (!hasReturned) {
                 bc.addAload(var);
-                bc.addOpcode(191);
+                bc.addOpcode(ATHROW);
             }
-            this.addFinally(jsrHook.jsrList, finallyBlock);
+
+            addFinally(jsrHook.jsrList, finallyBlock);
         }
-        final int pcEnd = bc.currentPc();
-        this.patchGoto(gotoList, pcEnd);
-        this.hasReturned = !tryNotReturn;
-        if (finallyBlock != null && tryNotReturn) {
-            finallyBlock.accept(this);
+
+        int pcEnd = bc.currentPc();
+        patchGoto(gotoList, pcEnd);
+        hasReturned = !tryNotReturn;
+        if (finallyBlock != null) {
+            if (tryNotReturn)
+                finallyBlock.accept(this);
         }
     }
-    
-    private void addFinally(final ArrayList returnList, final Stmnt finallyBlock) throws CompileError {
-        final Bytecode bc = this.bytecode;
-        for (int n = returnList.size(), i = 0; i < n; ++i) {
-            final int[] ret = returnList.get(i);
-            final int pc = ret[0];
+
+    /**
+     * Adds a finally clause for earch return statement.
+     */
+    private void addFinally(ArrayList returnList, Stmnt finallyBlock)
+            throws CompileError
+    {
+        Bytecode bc = bytecode;
+        int n = returnList.size();
+        for (int i = 0; i < n; ++i) {
+            final int[] ret = (int[])returnList.get(i);
+            int pc = ret[0];
             bc.write16bit(pc, bc.currentPc() - pc + 1);
-            final ReturnHook hook = new JsrHook2(this, ret);
+            ReturnHook hook = new JsrHook2(this, ret);
             finallyBlock.accept(this);
             hook.remove(this);
-            if (!this.hasReturned) {
-                bc.addOpcode(167);
+            if (!hasReturned) {
+                bc.addOpcode(Opcode.GOTO);
                 bc.addIndex(pc + 3 - bc.currentPc());
             }
         }
     }
-    
-    @Override
-    public void atNewExpr(final NewExpr expr) throws CompileError {
-        if (expr.isArray()) {
-            this.atNewArrayExpr(expr);
-        }
+
+    public void atNewExpr(NewExpr expr) throws CompileError {
+        if (expr.isArray())
+            atNewArrayExpr(expr);
         else {
-            final CtClass clazz = this.resolver.lookupClassByName(expr.getClassName());
-            final String cname = clazz.getName();
-            final ASTList args = expr.getArguments();
-            this.bytecode.addNew(cname);
-            this.bytecode.addOpcode(89);
-            this.atMethodCallCore(clazz, "<init>", args, false, true, -1, null);
-            this.exprType = 307;
-            this.arrayDim = 0;
-            this.className = MemberResolver.javaToJvmName(cname);
+            CtClass clazz = resolver.lookupClassByName(expr.getClassName());
+            String cname = clazz.getName();
+            ASTList args = expr.getArguments();
+            bytecode.addNew(cname);
+            bytecode.addOpcode(DUP);
+
+            atMethodCallCore(clazz, MethodInfo.nameInit, args,
+                    false, true, -1, null);
+
+            exprType = CLASS;
+            arrayDim = 0;
+            className = MemberResolver.javaToJvmName(cname);
         }
     }
-    
-    public void atNewArrayExpr(final NewExpr expr) throws CompileError {
-        final int type = expr.getArrayType();
-        final ASTList size = expr.getArraySize();
-        final ASTList classname = expr.getClassName();
-        final ArrayInit init = expr.getInitializer();
-        if (size.length() <= 1) {
-            final ASTree sizeExpr = size.head();
-            this.atNewArrayExpr2(type, sizeExpr, Declarator.astToClassName(classname, '/'), init);
+
+    public void atNewArrayExpr(NewExpr expr) throws CompileError {
+        int type = expr.getArrayType();
+        ASTList size = expr.getArraySize();
+        ASTList classname = expr.getClassName();
+        ArrayInit init = expr.getInitializer();
+        if (size.length() > 1) {
+            if (init != null)
+                throw new CompileError(
+                        "sorry, multi-dimensional array initializer " +
+                                "for new is not supported");
+
+            atMultiNewArray(type, classname, size);
             return;
         }
-        if (init != null) {
-            throw new CompileError("sorry, multi-dimensional array initializer for new is not supported");
-        }
-        this.atMultiNewArray(type, classname, size);
+
+        ASTree sizeExpr = size.head();
+        atNewArrayExpr2(type, sizeExpr, Declarator.astToClassName(classname, '/'), init);
     }
-    
-    private void atNewArrayExpr2(final int type, final ASTree sizeExpr, final String jvmClassname, final ArrayInit init) throws CompileError {
-        if (init == null) {
-            if (sizeExpr == null) {
+
+    private void atNewArrayExpr2(int type, ASTree sizeExpr,
+                                 String jvmClassname, ArrayInit init) throws CompileError {
+        if (init == null)
+            if (sizeExpr == null)
                 throw new CompileError("no array size");
+            else
+                sizeExpr.accept(this);
+        else
+            if (sizeExpr == null) {
+                int s = init.length();
+                bytecode.addIconst(s);
             }
-            sizeExpr.accept(this);
-        }
-        else {
-            if (sizeExpr != null) {
+            else
                 throw new CompileError("unnecessary array size specified for new");
-            }
-            final int s = init.length();
-            this.bytecode.addIconst(s);
-        }
+
         String elementClass;
-        if (type == 307) {
-            elementClass = this.resolveClassName(jvmClassname);
-            this.bytecode.addAnewarray(MemberResolver.jvmToJavaName(elementClass));
+        if (type == CLASS) {
+            elementClass = resolveClassName(jvmClassname);
+            bytecode.addAnewarray(MemberResolver.jvmToJavaName(elementClass));
         }
         else {
             elementClass = null;
             int atype = 0;
             switch (type) {
-                case 301: {
-                    atype = 4;
+                case BOOLEAN :
+                    atype = T_BOOLEAN;
                     break;
-                }
-                case 306: {
-                    atype = 5;
+                case CHAR :
+                    atype = T_CHAR;
                     break;
-                }
-                case 317: {
-                    atype = 6;
+                case FLOAT :
+                    atype = T_FLOAT;
                     break;
-                }
-                case 312: {
-                    atype = 7;
+                case DOUBLE :
+                    atype = T_DOUBLE;
                     break;
-                }
-                case 303: {
-                    atype = 8;
+                case BYTE :
+                    atype = T_BYTE;
                     break;
-                }
-                case 334: {
-                    atype = 9;
+                case SHORT :
+                    atype = T_SHORT;
                     break;
-                }
-                case 324: {
-                    atype = 10;
+                case INT :
+                    atype = T_INT;
                     break;
-                }
-                case 326: {
-                    atype = 11;
+                case LONG :
+                    atype = T_LONG;
                     break;
-                }
-                default: {
+                default :
                     badNewExpr();
                     break;
-                }
             }
-            this.bytecode.addOpcode(188);
-            this.bytecode.add(atype);
+
+            bytecode.addOpcode(NEWARRAY);
+            bytecode.add(atype);
         }
+
         if (init != null) {
-            final int s2 = init.length();
+            int s = init.length();
             ASTList list = init;
-            for (int i = 0; i < s2; ++i) {
-                this.bytecode.addOpcode(89);
-                this.bytecode.addIconst(i);
+            for (int i = 0; i < s; i++) {
+                bytecode.addOpcode(DUP);
+                bytecode.addIconst(i);
                 list.head().accept(this);
-                if (!CodeGen.isRefType(type)) {
-                    this.atNumCastExpr(this.exprType, type);
-                }
-                this.bytecode.addOpcode(CodeGen.getArrayWriteOp(type, 0));
+                if (!isRefType(type))
+                    atNumCastExpr(exprType, type);
+
+                bytecode.addOpcode(getArrayWriteOp(type, 0));
                 list = list.tail();
             }
         }
-        this.exprType = type;
-        this.arrayDim = 1;
-        this.className = elementClass;
+
+        exprType = type;
+        arrayDim = 1;
+        className = elementClass;
     }
-    
+
     private static void badNewExpr() throws CompileError {
         throw new CompileError("bad new expression");
     }
-    
-    @Override
-    protected void atArrayVariableAssign(final ArrayInit init, final int varType, final int varArray, final String varClass) throws CompileError {
-        this.atNewArrayExpr2(varType, null, varClass, init);
+
+    protected void atArrayVariableAssign(ArrayInit init, int varType,
+                                         int varArray, String varClass) throws CompileError {
+        atNewArrayExpr2(varType, null, varClass, init);
     }
-    
-    @Override
-    public void atArrayInit(final ArrayInit init) throws CompileError {
+
+    public void atArrayInit(ArrayInit init) throws CompileError {
         throw new CompileError("array initializer is not supported");
     }
-    
-    protected void atMultiNewArray(final int type, final ASTList classname, ASTList size) throws CompileError {
-        final int dim = size.length();
-        int count = 0;
-        while (size != null) {
-            final ASTree s = size.head();
-            if (s == null) {
-                break;
-            }
+
+    protected void atMultiNewArray(int type, ASTList classname, ASTList size)
+            throws CompileError
+    {
+        int count, dim;
+        dim = size.length();
+        for (count = 0; size != null; size = size.tail()) {
+            ASTree s = size.head();
+            if (s == null)
+                break;          // int[][][] a = new int[3][4][];
+
             ++count;
             s.accept(this);
-            if (this.exprType != 324) {
+            if (exprType != INT)
                 throw new CompileError("bad type for array size");
-            }
-            size = size.tail();
         }
-        this.exprType = type;
-        this.arrayDim = dim;
+
         String desc;
-        if (type == 307) {
-            this.className = this.resolveClassName(classname);
-            desc = CodeGen.toJvmArrayName(this.className, dim);
+        exprType = type;
+        arrayDim = dim;
+        if (type == CLASS) {
+            className = resolveClassName(classname);
+            desc = toJvmArrayName(className, dim);
         }
-        else {
-            desc = CodeGen.toJvmTypeName(type, dim);
-        }
-        this.bytecode.addMultiNewarray(desc, count);
+        else
+            desc = toJvmTypeName(type, dim);
+
+        bytecode.addMultiNewarray(desc, count);
     }
-    
-    @Override
-    public void atCallExpr(final CallExpr expr) throws CompileError {
+
+    public void atCallExpr(CallExpr expr) throws CompileError {
         String mname = null;
         CtClass targetClass = null;
-        final ASTree method = expr.oprand1();
-        final ASTList args = (ASTList)expr.oprand2();
+        ASTree method = expr.oprand1();
+        ASTList args = (ASTList)expr.oprand2();
         boolean isStatic = false;
         boolean isSpecial = false;
         int aload0pos = -1;
-        final MemberResolver.Method cached = expr.getMethod();
+
+        MemberResolver.Method cached = expr.getMethod();
         if (method instanceof Member) {
             mname = ((Member)method).get();
-            targetClass = this.thisClass;
-            if (this.inStaticMethod || (cached != null && cached.isStatic())) {
-                isStatic = true;
-            }
+            targetClass = thisClass;
+            if (inStaticMethod || (cached != null && cached.isStatic()))
+                isStatic = true;            // should be static
             else {
-                aload0pos = this.bytecode.currentPc();
-                this.bytecode.addAload(0);
+                aload0pos = bytecode.currentPc();
+                bytecode.addAload(0);       // this
             }
         }
-        else if (method instanceof Keyword) {
+        else if (method instanceof Keyword) {   // constructor
             isSpecial = true;
-            mname = "<init>";
-            targetClass = this.thisClass;
-            if (this.inStaticMethod) {
+            mname = MethodInfo.nameInit;        // <init>
+            targetClass = thisClass;
+            if (inStaticMethod)
                 throw new CompileError("a constructor cannot be static");
-            }
-            this.bytecode.addAload(0);
-            if (((Keyword)method).get() == 336) {
+            else
+                bytecode.addAload(0);   // this
+
+            if (((Keyword)method).get() == SUPER)
                 targetClass = MemberResolver.getSuperclass(targetClass);
-            }
         }
         else if (method instanceof Expr) {
-            final Expr e = (Expr)method;
-            mname = ((Symbol)e.oprand2()).get();
-            final int op = e.getOperator();
-            if (op == 35) {
-                targetClass = this.resolver.lookupClass(((Symbol)e.oprand1()).get(), false);
-                isStatic = true;
-            }
-            else if (op == 46) {
-                final ASTree target = e.oprand1();
-                if (target instanceof Keyword && ((Keyword)target).get() == 336) {
-                    isSpecial = true;
-                }
-                try {
-                    target.accept(this);
-                }
-                catch (NoFieldException nfe) {
-                    if (nfe.getExpr() != target) {
-                        throw nfe;
-                    }
-                    this.exprType = 307;
-                    this.arrayDim = 0;
-                    this.className = nfe.getField();
+                Expr e = (Expr)method;
+                mname = ((Symbol)e.oprand2()).get();
+                int op = e.getOperator();
+                if (op == MEMBER) {                 // static method
+                    targetClass
+                            = resolver.lookupClass(((Symbol)e.oprand1()).get(), false);
                     isStatic = true;
                 }
-                if (this.arrayDim > 0) {
-                    targetClass = this.resolver.lookupClass("java.lang.Object", true);
+                else if (op == '.') {
+                    ASTree target = e.oprand1();
+                    if (target instanceof Keyword)
+                        if (((Keyword)target).get() == SUPER)
+                            isSpecial = true;
+
+                    try {
+                        target.accept(this);
+                    }
+                    catch (NoFieldException nfe) {
+                        if (nfe.getExpr() != target)
+                            throw nfe;
+
+                        // it should be a static method.
+                        exprType = CLASS;
+                        arrayDim = 0;
+                        className = nfe.getField(); // JVM-internal
+                        isStatic = true;
+                    }
+
+                    if (arrayDim > 0)
+                        targetClass = resolver.lookupClass(javaLangObject, true);
+                    else if (exprType == CLASS /* && arrayDim == 0 */)
+                        targetClass = resolver.lookupClassByJvmName(className);
+                    else
+                        badMethod();
                 }
-                else if (this.exprType == 307) {
-                    targetClass = this.resolver.lookupClassByJvmName(this.className);
-                }
-                else {
+                else
                     badMethod();
-                }
             }
-            else {
-                badMethod();
-            }
-        }
-        else {
-            fatal();
-        }
-        this.atMethodCallCore(targetClass, mname, args, isStatic, isSpecial, aload0pos, cached);
+            else
+                fatal();
+
+        atMethodCallCore(targetClass, mname, args, isStatic, isSpecial,
+                aload0pos, cached);
     }
-    
+
     private static void badMethod() throws CompileError {
         throw new CompileError("bad method");
     }
-    
-    public void atMethodCallCore(final CtClass targetClass, final String mname, final ASTList args, boolean isStatic, final boolean isSpecial, final int aload0pos, MemberResolver.Method found) throws CompileError {
-        final int nargs = this.getMethodArgsLength(args);
-        final int[] types = new int[nargs];
-        final int[] dims = new int[nargs];
-        final String[] cnames = new String[nargs];
+
+    /*
+     * atMethodCallCore() is also called by doit() in NewExpr.ProceedForNew
+     *
+     * @param targetClass       the class at which method lookup starts.
+     * @param found         not null if the method look has been already done.
+     */
+    public void atMethodCallCore(CtClass targetClass, String mname,
+                                 ASTList args, boolean isStatic, boolean isSpecial,
+                                 int aload0pos, MemberResolver.Method found)
+            throws CompileError
+    {
+        int nargs = getMethodArgsLength(args);
+        int[] types = new int[nargs];
+        int[] dims = new int[nargs];
+        String[] cnames = new String[nargs];
+
         if (!isStatic && found != null && found.isStatic()) {
-            this.bytecode.addOpcode(87);
+            bytecode.addOpcode(POP);
             isStatic = true;
         }
-        final int stack = this.bytecode.getStackDepth();
-        this.atMethodArgs(args, types, dims, cnames);
-        final int count = this.bytecode.getStackDepth() - stack + 1;
-        if (found == null) {
-            found = this.resolver.lookupMethod(targetClass, this.thisClass, this.thisMethod, mname, types, dims, cnames);
-        }
+
+        int stack = bytecode.getStackDepth();
+
+        // generate code for evaluating arguments.
+        atMethodArgs(args, types, dims, cnames);
+
+        // used by invokeinterface
+        int count = bytecode.getStackDepth() - stack + 1;
+
+        if (found == null)
+            found = resolver.lookupMethod(targetClass, thisClass, thisMethod,
+                    mname, types, dims, cnames);
+
         if (found == null) {
             String msg;
-            if (mname.equals("<init>")) {
+            if (mname.equals(MethodInfo.nameInit))
                 msg = "constructor not found";
-            }
-            else {
-                msg = "Method " + mname + " not found in " + targetClass.getName();
-            }
+            else
+                msg = "Method " + mname + " not found in "
+                        + targetClass.getName();
+
             throw new CompileError(msg);
         }
-        this.atMethodCallCore2(targetClass, mname, isStatic, isSpecial, aload0pos, count, found);
+
+        atMethodCallCore2(targetClass, mname, isStatic, isSpecial,
+                aload0pos, count, found);
     }
-    
-    private void atMethodCallCore2(final CtClass targetClass, String mname, boolean isStatic, boolean isSpecial, final int aload0pos, final int count, final MemberResolver.Method found) throws CompileError {
+
+    private void atMethodCallCore2(CtClass targetClass, String mname,
+                                   boolean isStatic, boolean isSpecial,
+                                   int aload0pos, int count,
+                                   MemberResolver.Method found)
+            throws CompileError
+    {
         CtClass declClass = found.declaring;
-        final MethodInfo minfo = found.info;
+        MethodInfo minfo = found.info;
         String desc = minfo.getDescriptor();
         int acc = minfo.getAccessFlags();
-        if (mname.equals("<init>")) {
+
+        if (mname.equals(MethodInfo.nameInit)) {
             isSpecial = true;
-            if (declClass != targetClass) {
+            if (declClass != targetClass)
                 throw new CompileError("no such constructor: " + targetClass.getName());
-            }
-            if (declClass != this.thisClass && AccessFlag.isPrivate(acc)) {
-                desc = this.getAccessibleConstructor(desc, declClass, minfo);
-                this.bytecode.addOpcode(1);
+
+            if (declClass != thisClass && AccessFlag.isPrivate(acc)) {
+                desc = getAccessibleConstructor(desc, declClass, minfo);
+                bytecode.addOpcode(Opcode.ACONST_NULL); // the last parameter
             }
         }
-        else if (AccessFlag.isPrivate(acc)) {
-            if (declClass == this.thisClass) {
+        else if (AccessFlag.isPrivate(acc))
+            if (declClass == thisClass)
                 isSpecial = true;
-            }
             else {
                 isSpecial = false;
                 isStatic = true;
-                final String origDesc = desc;
-                if ((acc & 0x8) == 0x0) {
-                    desc = Descriptor.insertParameter(declClass.getName(), origDesc);
-                }
-                acc = (AccessFlag.setPackage(acc) | 0x8);
-                mname = this.getAccessiblePrivate(mname, origDesc, desc, minfo, declClass);
+                String origDesc = desc;
+                if ((acc & AccessFlag.STATIC) == 0)
+                    desc = Descriptor.insertParameter(declClass.getName(),
+                            origDesc);
+
+                acc = AccessFlag.setPackage(acc) | AccessFlag.STATIC;
+                mname = getAccessiblePrivate(mname, origDesc, desc,
+                        minfo, declClass);
             }
-        }
+
         boolean popTarget = false;
-        if ((acc & 0x8) != 0x0) {
+        if ((acc & AccessFlag.STATIC) != 0) {
             if (!isStatic) {
+                /* this method is static but the target object is
+                   on stack.  It must be popped out.  If aload0pos >= 0,
+                   then the target object was pushed by aload_0.  It is
+                   overwritten by NOP.
+                */
                 isStatic = true;
-                if (aload0pos >= 0) {
-                    this.bytecode.write(aload0pos, 0);
-                }
-                else {
+                if (aload0pos >= 0)
+                    bytecode.write(aload0pos, NOP);
+                else
                     popTarget = true;
-                }
             }
-            this.bytecode.addInvokestatic(declClass, mname, desc);
+
+            bytecode.addInvokestatic(declClass, mname, desc);
         }
-        else if (isSpecial) {
-            this.bytecode.addInvokespecial(declClass, mname, desc);
-        }
+        else if (isSpecial)    // if (isSpecial && notStatic(acc))
+            bytecode.addInvokespecial(declClass, mname, desc);
         else {
-            if (!Modifier.isPublic(declClass.getModifiers()) || declClass.isInterface() != targetClass.isInterface()) {
+            if (!Modifier.isPublic(declClass.getModifiers())
+                    || declClass.isInterface() != targetClass.isInterface())
                 declClass = targetClass;
-            }
-            if (declClass.isInterface()) {
-                this.bytecode.addInvokeinterface(declClass, mname, desc, count);
-            }
-            else {
-                if (isStatic) {
+
+            if (declClass.isInterface())
+                bytecode.addInvokeinterface(declClass, mname, desc, count);
+            else
+                if (isStatic)
                     throw new CompileError(mname + " is not static");
-                }
-                this.bytecode.addInvokevirtual(declClass, mname, desc);
-            }
+                else
+                    bytecode.addInvokevirtual(declClass, mname, desc);
         }
-        this.setReturnType(desc, isStatic, popTarget);
+
+        setReturnType(desc, isStatic, popTarget);
     }
-    
-    protected String getAccessiblePrivate(final String methodName, final String desc, final String newDesc, final MethodInfo minfo, final CtClass declClass) throws CompileError {
-        if (this.isEnclosing(declClass, this.thisClass)) {
-            final AccessorMaker maker = declClass.getAccessorMaker();
-            if (maker != null) {
-                return maker.getMethodAccessor(methodName, desc, newDesc, minfo);
-            }
+
+    /*
+     * Finds (or adds if necessary) a hidden accessor if the method
+     * is in an enclosing class.
+     *
+     * @param desc          the descriptor of the method.
+     * @param declClass     the class declaring the method.
+     */
+    protected String getAccessiblePrivate(String methodName, String desc,
+                                          String newDesc, MethodInfo minfo,
+                                          CtClass declClass)
+            throws CompileError
+    {
+        if (isEnclosing(declClass, thisClass)) {
+            AccessorMaker maker = declClass.getAccessorMaker();
+            if (maker != null)
+                return maker.getMethodAccessor(methodName, desc, newDesc,
+                        minfo);
         }
-        throw new CompileError("Method " + methodName + " is private");
+
+        throw new CompileError("Method " + methodName
+                + " is private");
     }
-    
-    protected String getAccessibleConstructor(final String desc, final CtClass declClass, final MethodInfo minfo) throws CompileError {
-        if (this.isEnclosing(declClass, this.thisClass)) {
-            final AccessorMaker maker = declClass.getAccessorMaker();
-            if (maker != null) {
+
+    /*
+     * Finds (or adds if necessary) a hidden constructor if the given
+     * constructor is in an enclosing class.
+     *
+     * @param desc          the descriptor of the constructor.
+     * @param declClass     the class declaring the constructor.
+     * @param minfo         the method info of the constructor.
+     * @return the descriptor of the hidden constructor.
+     */
+    protected String getAccessibleConstructor(String desc, CtClass declClass,
+                                              MethodInfo minfo)
+            throws CompileError
+    {
+        if (isEnclosing(declClass, thisClass)) {
+            AccessorMaker maker = declClass.getAccessorMaker();
+            if (maker != null)
                 return maker.getConstructor(declClass, desc, minfo);
-            }
         }
-        throw new CompileError("the called constructor is private in " + declClass.getName());
+
+        throw new CompileError("the called constructor is private in "
+                + declClass.getName());
     }
-    
-    private boolean isEnclosing(final CtClass outer, CtClass inner) {
+
+    private boolean isEnclosing(CtClass outer, CtClass inner) {
         try {
             while (inner != null) {
                 inner = inner.getDeclaringClass();
-                if (inner == outer) {
+                if (inner == outer)
                     return true;
-                }
             }
         }
-        catch (NotFoundException ex) {}
+        catch (NotFoundException e) {}
         return false;
     }
-    
-    public int getMethodArgsLength(final ASTList args) {
+
+    public int getMethodArgsLength(ASTList args) {
         return ASTList.length(args);
     }
-    
-    public void atMethodArgs(ASTList args, final int[] types, final int[] dims, final String[] cnames) throws CompileError {
+
+    public void atMethodArgs(ASTList args, int[] types, int[] dims,
+                             String[] cnames) throws CompileError {
         int i = 0;
         while (args != null) {
-            final ASTree a = args.head();
+            ASTree a = args.head();
             a.accept(this);
-            types[i] = this.exprType;
-            dims[i] = this.arrayDim;
-            cnames[i] = this.className;
+            types[i] = exprType;
+            dims[i] = arrayDim;
+            cnames[i] = className;
             ++i;
             args = args.tail();
         }
     }
-    
-    void setReturnType(final String desc, final boolean isStatic, final boolean popTarget) throws CompileError {
-        int i = desc.indexOf(41);
-        if (i < 0) {
+
+    void setReturnType(String desc, boolean isStatic, boolean popTarget)
+            throws CompileError
+    {
+        int i = desc.indexOf(')');
+        if (i < 0)
             badMethod();
-        }
+
         char c = desc.charAt(++i);
         int dim = 0;
         while (c == '[') {
             ++dim;
             c = desc.charAt(++i);
         }
-        this.arrayDim = dim;
+
+        arrayDim = dim;
         if (c == 'L') {
-            final int j = desc.indexOf(59, i + 1);
-            if (j < 0) {
+            int j = desc.indexOf(';', i + 1);
+            if (j < 0)
                 badMethod();
-            }
-            this.exprType = 307;
-            this.className = desc.substring(i + 1, j);
+
+            exprType = CLASS;
+            className = desc.substring(i + 1, j);
         }
         else {
-            this.exprType = MemberResolver.descToType(c);
-            this.className = null;
+            exprType = MemberResolver.descToType(c);
+            className = null;
         }
-        final int etype = this.exprType;
-        if (isStatic && popTarget) {
-            if (CodeGen.is2word(etype, dim)) {
-                this.bytecode.addOpcode(93);
-                this.bytecode.addOpcode(88);
-                this.bytecode.addOpcode(87);
-            }
-            else if (etype == 344) {
-                this.bytecode.addOpcode(87);
-            }
-            else {
-                this.bytecode.addOpcode(95);
-                this.bytecode.addOpcode(87);
+
+        int etype = exprType;
+        if (isStatic) {
+            if (popTarget) {
+                if (is2word(etype, dim)) {
+                    bytecode.addOpcode(DUP2_X1);
+                    bytecode.addOpcode(POP2);
+                    bytecode.addOpcode(POP);
+                }
+                else if (etype == VOID)
+                    bytecode.addOpcode(POP);
+                else {
+                    bytecode.addOpcode(SWAP);
+                    bytecode.addOpcode(POP);
+                }
             }
         }
     }
-    
-    @Override
-    protected void atFieldAssign(final Expr expr, final int op, final ASTree left, final ASTree right, final boolean doDup) throws CompileError {
-        final CtField f = this.fieldAccess(left, false);
-        final boolean is_static = this.resultStatic;
-        if (op != 61 && !is_static) {
-            this.bytecode.addOpcode(89);
-        }
+
+    protected void atFieldAssign(Expr expr, int op, ASTree left,
+                                 ASTree right, boolean doDup) throws CompileError
+    {
+        CtField f = fieldAccess(left, false);
+        boolean is_static = resultStatic;
+        if (op != '=' && !is_static)
+            bytecode.addOpcode(DUP);
+
         int fi;
-        if (op == 61) {
-            final FieldInfo finfo = f.getFieldInfo2();
-            this.setFieldType(finfo);
-            final AccessorMaker maker = this.isAccessibleField(f, finfo);
-            if (maker == null) {
-                fi = this.addFieldrefInfo(f, finfo);
-            }
-            else {
+        if (op == '=') {
+            FieldInfo finfo = f.getFieldInfo2();
+            setFieldType(finfo);
+            AccessorMaker maker = isAccessibleField(f, finfo);
+            if (maker == null)
+                fi = addFieldrefInfo(f, finfo);
+            else
                 fi = 0;
-            }
         }
-        else {
-            fi = this.atFieldRead(f, is_static);
-        }
-        final int fType = this.exprType;
-        final int fDim = this.arrayDim;
-        final String cname = this.className;
-        this.atAssignCore(expr, op, right, fType, fDim, cname);
-        final boolean is2w = CodeGen.is2word(fType, fDim);
+        else
+            fi = atFieldRead(f, is_static);
+
+        int fType = exprType;
+        int fDim = arrayDim;
+        String cname = className;
+
+        atAssignCore(expr, op, right, fType, fDim, cname);
+
+        boolean is2w = is2word(fType, fDim);
         if (doDup) {
             int dup_code;
-            if (is_static) {
-                dup_code = (is2w ? 92 : 89);
-            }
-            else {
-                dup_code = (is2w ? 93 : 90);
-            }
-            this.bytecode.addOpcode(dup_code);
+            if (is_static)
+                dup_code = (is2w ? DUP2 : DUP);
+            else
+                dup_code = (is2w ? DUP2_X1 : DUP_X1);
+
+            bytecode.addOpcode(dup_code);
         }
-        this.atFieldAssignCore(f, is_static, fi, is2w);
-        this.exprType = fType;
-        this.arrayDim = fDim;
-        this.className = cname;
+
+        atFieldAssignCore(f, is_static, fi, is2w);
+
+        exprType = fType;
+        arrayDim = fDim;
+        className = cname;
     }
-    
-    private void atFieldAssignCore(final CtField f, final boolean is_static, final int fi, final boolean is2byte) throws CompileError {
+
+    /* If fi == 0, the field must be a private field in an enclosing class.
+     */
+    private void atFieldAssignCore(CtField f, boolean is_static, int fi,
+                                   boolean is2byte) throws CompileError {
         if (fi != 0) {
             if (is_static) {
-                this.bytecode.add(179);
-                this.bytecode.growStack(is2byte ? -2 : -1);
+                bytecode.add(PUTSTATIC);
+                bytecode.growStack(is2byte ? -2 : -1);
             }
             else {
-                this.bytecode.add(181);
-                this.bytecode.growStack(is2byte ? -3 : -2);
+                bytecode.add(PUTFIELD);
+                bytecode.growStack(is2byte ? -3 : -2);
             }
-            this.bytecode.addIndex(fi);
+
+            bytecode.addIndex(fi);
         }
         else {
-            final CtClass declClass = f.getDeclaringClass();
-            final AccessorMaker maker = declClass.getAccessorMaker();
-            final FieldInfo finfo = f.getFieldInfo2();
-            final MethodInfo minfo = maker.getFieldSetter(finfo, is_static);
-            this.bytecode.addInvokestatic(declClass, minfo.getName(), minfo.getDescriptor());
+            CtClass declClass = f.getDeclaringClass();
+            AccessorMaker maker = declClass.getAccessorMaker();
+            // make should be non null.
+            FieldInfo finfo = f.getFieldInfo2();
+            MethodInfo minfo = maker.getFieldSetter(finfo, is_static);
+            bytecode.addInvokestatic(declClass, minfo.getName(),
+                    minfo.getDescriptor());
         }
     }
-    
-    @Override
-    public void atMember(final Member mem) throws CompileError {
-        this.atFieldRead(mem);
+
+    /* overwritten in JvstCodeGen.
+     */
+    public void atMember(Member mem) throws CompileError {
+        atFieldRead(mem);
     }
-    
-    @Override
-    protected void atFieldRead(final ASTree expr) throws CompileError {
-        final CtField f = this.fieldAccess(expr, true);
+
+    protected void atFieldRead(ASTree expr) throws CompileError
+    {
+        CtField f = fieldAccess(expr, true);
         if (f == null) {
-            this.atArrayLength(expr);
+            atArrayLength(expr);
             return;
         }
-        final boolean is_static = this.resultStatic;
-        final ASTree cexpr = TypeChecker.getConstantFieldValue(f);
-        if (cexpr == null) {
-            this.atFieldRead(f, is_static);
-        }
+
+        boolean is_static = resultStatic;
+        ASTree cexpr = TypeChecker.getConstantFieldValue(f);
+        if (cexpr == null)
+            atFieldRead(f, is_static);
         else {
             cexpr.accept(this);
-            this.setFieldType(f.getFieldInfo2());
+            setFieldType(f.getFieldInfo2());
         }
     }
-    
-    private void atArrayLength(final ASTree expr) throws CompileError {
-        if (this.arrayDim == 0) {
+
+    private void atArrayLength(ASTree expr) throws CompileError {
+        if (arrayDim == 0)
             throw new CompileError(".length applied to a non array");
-        }
-        this.bytecode.addOpcode(190);
-        this.exprType = 324;
-        this.arrayDim = 0;
+
+        bytecode.addOpcode(ARRAYLENGTH);
+        exprType = INT;
+        arrayDim = 0;
     }
-    
-    private int atFieldRead(final CtField f, final boolean isStatic) throws CompileError {
-        final FieldInfo finfo = f.getFieldInfo2();
-        final boolean is2byte = this.setFieldType(finfo);
-        final AccessorMaker maker = this.isAccessibleField(f, finfo);
+
+    /**
+     * Generates bytecode for reading a field value.
+     * It returns a fieldref_info index or zero if the field is a private
+     * one declared in an enclosing class. 
+     */
+    private int atFieldRead(CtField f, boolean isStatic) throws CompileError {
+        FieldInfo finfo = f.getFieldInfo2();
+        boolean is2byte = setFieldType(finfo);
+        AccessorMaker maker = isAccessibleField(f, finfo);
         if (maker != null) {
-            final MethodInfo minfo = maker.getFieldGetter(finfo, isStatic);
-            this.bytecode.addInvokestatic(f.getDeclaringClass(), minfo.getName(), minfo.getDescriptor());
+            MethodInfo minfo = maker.getFieldGetter(finfo, isStatic);
+            bytecode.addInvokestatic(f.getDeclaringClass(), minfo.getName(),
+                    minfo.getDescriptor());
             return 0;
         }
-        final int fi = this.addFieldrefInfo(f, finfo);
-        if (isStatic) {
-            this.bytecode.add(178);
-            this.bytecode.growStack(is2byte ? 2 : 1);
-        }
         else {
-            this.bytecode.add(180);
-            this.bytecode.growStack(is2byte ? 1 : 0);
+            int fi = addFieldrefInfo(f, finfo);
+            if (isStatic) {
+                bytecode.add(GETSTATIC);
+                bytecode.growStack(is2byte ? 2 : 1);
+            }
+            else {
+                bytecode.add(GETFIELD);
+                bytecode.growStack(is2byte ? 1 : 0);
+            }
+
+            bytecode.addIndex(fi);
+            return fi;
         }
-        this.bytecode.addIndex(fi);
-        return fi;
     }
-    
-    private AccessorMaker isAccessibleField(final CtField f, final FieldInfo finfo) throws CompileError {
-        if (!AccessFlag.isPrivate(finfo.getAccessFlags()) || f.getDeclaringClass() == this.thisClass) {
-            return null;
+
+    /**
+     * Returns null if the field is accessible.  Otherwise, it throws
+     * an exception or it returns AccessorMaker if the field is a private
+     * one declared in an enclosing class.
+     */
+    private AccessorMaker isAccessibleField(CtField f, FieldInfo finfo)
+            throws CompileError
+    {
+        if (AccessFlag.isPrivate(finfo.getAccessFlags())
+                && f.getDeclaringClass() != thisClass) {
+            CtClass declClass = f.getDeclaringClass();
+            if (isEnclosing(declClass, thisClass)) {
+                AccessorMaker maker = declClass.getAccessorMaker();
+                if (maker != null)
+                    return maker;
+                else
+                    throw new CompileError("fatal error.  bug?");
+            }
+            else
+                throw new CompileError("Field " + f.getName() + " in "
+                        + declClass.getName() + " is private.");
         }
-        final CtClass declClass = f.getDeclaringClass();
-        if (!this.isEnclosing(declClass, this.thisClass)) {
-            throw new CompileError("Field " + f.getName() + " in " + declClass.getName() + " is private.");
-        }
-        final AccessorMaker maker = declClass.getAccessorMaker();
-        if (maker != null) {
-            return maker;
-        }
-        throw new CompileError("fatal error.  bug?");
+
+        return null;    // accessible field
     }
-    
-    private boolean setFieldType(final FieldInfo finfo) throws CompileError {
-        final String type = finfo.getDescriptor();
+
+    /**
+     * Sets exprType, arrayDim, and className.
+     *
+     * @return true if the field type is long or double. 
+     */
+    private boolean setFieldType(FieldInfo finfo) throws CompileError {
+        String type = finfo.getDescriptor();
+
         int i = 0;
         int dim = 0;
-        char c;
-        for (c = type.charAt(i); c == '['; c = type.charAt(++i)) {
+        char c = type.charAt(i);
+        while (c == '[') {
             ++dim;
+            c = type.charAt(++i);
         }
-        this.arrayDim = dim;
-        this.exprType = MemberResolver.descToType(c);
-        if (c == 'L') {
-            this.className = type.substring(i + 1, type.indexOf(59, i + 1));
-        }
-        else {
-            this.className = null;
-        }
-        final boolean is2byte = dim == 0 && (c == 'J' || c == 'D');
+
+        arrayDim = dim;
+        exprType = MemberResolver.descToType(c);
+
+        if (c == 'L')
+            className = type.substring(i + 1, type.indexOf(';', i + 1));
+        else
+            className = null;
+
+        boolean is2byte = dim == 0 && (c == 'J' || c == 'D');
         return is2byte;
     }
-    
-    private int addFieldrefInfo(final CtField f, final FieldInfo finfo) {
-        final ConstPool cp = this.bytecode.getConstPool();
-        final String cname = f.getDeclaringClass().getName();
-        final int ci = cp.addClassInfo(cname);
-        final String name = finfo.getName();
-        final String type = finfo.getDescriptor();
+
+    private int addFieldrefInfo(CtField f, FieldInfo finfo) {
+        ConstPool cp = bytecode.getConstPool();
+        String cname = f.getDeclaringClass().getName();
+        int ci = cp.addClassInfo(cname);
+        String name = finfo.getName();
+        String type = finfo.getDescriptor();
         return cp.addFieldrefInfo(ci, name, type);
     }
-    
-    @Override
-    protected void atClassObject2(final String cname) throws CompileError {
-        if (this.getMajorVersion() < 49) {
+
+    protected void atClassObject2(String cname) throws CompileError {
+        if (getMajorVersion() < ClassFile.JAVA_5)
             super.atClassObject2(cname);
-        }
-        else {
-            this.bytecode.addLdc(this.bytecode.getConstPool().addClassInfo(cname));
-        }
+        else
+            bytecode.addLdc(bytecode.getConstPool().addClassInfo(cname));
     }
-    
-    @Override
-    protected void atFieldPlusPlus(final int token, final boolean isPost, final ASTree oprand, final Expr expr, final boolean doDup) throws CompileError {
-        final CtField f = this.fieldAccess(oprand, false);
-        final boolean is_static = this.resultStatic;
-        if (!is_static) {
-            this.bytecode.addOpcode(89);
-        }
-        final int fi = this.atFieldRead(f, is_static);
-        final int t = this.exprType;
-        final boolean is2w = CodeGen.is2word(t, this.arrayDim);
+
+    protected void atFieldPlusPlus(int token, boolean isPost,
+                                   ASTree oprand, Expr expr, boolean doDup)
+            throws CompileError
+    {
+        CtField f = fieldAccess(oprand, false);
+        boolean is_static = resultStatic;
+        if (!is_static)
+            bytecode.addOpcode(DUP);
+
+        int fi = atFieldRead(f, is_static);
+        int t = exprType;
+        boolean is2w = is2word(t, arrayDim);
+
         int dup_code;
-        if (is_static) {
-            dup_code = (is2w ? 92 : 89);
-        }
-        else {
-            dup_code = (is2w ? 93 : 90);
-        }
-        this.atPlusPlusCore(dup_code, doDup, token, isPost, expr);
-        this.atFieldAssignCore(f, is_static, fi, is2w);
+        if (is_static)
+            dup_code = (is2w ? DUP2 : DUP);
+        else
+            dup_code = (is2w ? DUP2_X1 : DUP_X1);
+
+        atPlusPlusCore(dup_code, doDup, token, isPost, expr);
+        atFieldAssignCore(f, is_static, fi, is2w);
     }
-    
-    protected CtField fieldAccess(final ASTree expr, final boolean acceptLength) throws CompileError {
+
+    /* This method also returns a value in resultStatic.
+     *
+     * @param acceptLength      true if array length is acceptable
+     */
+    protected CtField fieldAccess(ASTree expr, boolean acceptLength)
+            throws CompileError
+    {
         if (expr instanceof Member) {
-            final String name = ((Member)expr).get();
+            String name = ((Member)expr).get();
             CtField f = null;
             try {
-                f = this.thisClass.getField(name);
+                f = thisClass.getField(name);
             }
-            catch (NotFoundException e2) {
+            catch (NotFoundException e) {
+                // EXPR might be part of a static member access?
                 throw new NoFieldException(name, expr);
             }
-            final boolean is_static = Modifier.isStatic(f.getModifiers());
-            if (!is_static) {
-                if (this.inStaticMethod) {
-                    throw new CompileError("not available in a static method: " + name);
-                }
-                this.bytecode.addAload(0);
-            }
-            this.resultStatic = is_static;
+
+            boolean is_static = Modifier.isStatic(f.getModifiers());
+            if (!is_static)
+                if (inStaticMethod)
+                    throw new CompileError(
+                            "not available in a static method: " + name);
+                else
+                    bytecode.addAload(0);       // this
+
+            resultStatic = is_static;
             return f;
         }
-        if (expr instanceof Expr) {
-            final Expr e = (Expr)expr;
-            final int op = e.getOperator();
-            if (op == 35) {
-                final CtField f2 = this.resolver.lookupField(((Symbol)e.oprand1()).get(), (Symbol)e.oprand2());
-                this.resultStatic = true;
-                return f2;
+        else if (expr instanceof Expr) {
+            Expr e = (Expr)expr;
+            int op = e.getOperator();
+            if (op == MEMBER) {
+                /* static member by # (extension by Javassist)
+                 * For example, if int.class is parsed, the resulting tree
+                 * is (# "java.lang.Integer" "TYPE"). 
+                 */
+                CtField f = resolver.lookupField(((Symbol)e.oprand1()).get(),
+                        (Symbol)e.oprand2());
+                resultStatic = true;
+                return f;
             }
-            if (op == 46) {
-                CtField f2 = null;
+            else if (op == '.') {
+                CtField f = null;
                 try {
                     e.oprand1().accept(this);
-                    if (this.exprType == 307 && this.arrayDim == 0) {
-                        f2 = this.resolver.lookupFieldByJvmName(this.className, (Symbol)e.oprand2());
-                    }
-                    else {
-                        if (acceptLength && this.arrayDim > 0 && ((Symbol)e.oprand2()).get().equals("length")) {
-                            return null;
-                        }
+                    /* Don't call lookupFieldByJvmName2().
+                     * The left operand of . is not a class name but
+                     * a normal expression.
+                     */
+                    if (exprType == CLASS && arrayDim == 0)
+                        f = resolver.lookupFieldByJvmName(className,
+                                (Symbol)e.oprand2());
+                    else if (acceptLength && arrayDim > 0
+                            && ((Symbol)e.oprand2()).get().equals("length"))
+                        return null;    // expr is an array length.
+                    else
                         badLvalue();
-                    }
-                    final boolean is_static2 = Modifier.isStatic(f2.getModifiers());
-                    if (is_static2) {
-                        this.bytecode.addOpcode(87);
-                    }
-                    this.resultStatic = is_static2;
-                    return f2;
+
+                    boolean is_static = Modifier.isStatic(f.getModifiers());
+                    if (is_static)
+                        bytecode.addOpcode(POP);
+
+                    resultStatic = is_static;
+                    return f;
                 }
                 catch (NoFieldException nfe) {
-                    if (nfe.getExpr() != e.oprand1()) {
+                    if (nfe.getExpr() != e.oprand1())
                         throw nfe;
-                    }
-                    final Symbol fname = (Symbol)e.oprand2();
-                    final String cname = nfe.getField();
-                    f2 = this.resolver.lookupFieldByJvmName2(cname, fname, expr);
-                    this.resultStatic = true;
-                    return f2;
+
+                    /* EXPR should be a static field.
+                     * If EXPR might be part of a qualified class name,
+                     * lookupFieldByJvmName2() throws NoFieldException.
+                     */
+                    Symbol fname = (Symbol)e.oprand2();
+                    String cname = nfe.getField();
+                    f = resolver.lookupFieldByJvmName2(cname, fname, expr);
+                    resultStatic = true;
+                    return f;
                 }
             }
-            badLvalue();
+            else
+                badLvalue();
         }
-        else {
+        else
             badLvalue();
-        }
-        this.resultStatic = false;
-        return null;
+
+        resultStatic = false;
+        return null;    // never reach
     }
-    
+
     private static void badLvalue() throws CompileError {
         throw new CompileError("bad l-value");
     }
-    
-    public CtClass[] makeParamList(final MethodDecl md) throws CompileError {
-        ASTList plist = md.getParams();
+
+    public CtClass[] makeParamList(MethodDecl md) throws CompileError {
         CtClass[] params;
-        if (plist == null) {
+        ASTList plist = md.getParams();
+        if (plist == null)
             params = new CtClass[0];
-        }
         else {
             int i = 0;
             params = new CtClass[plist.length()];
             while (plist != null) {
-                params[i++] = this.resolver.lookupClass((Declarator)plist.head());
+                params[i++] = resolver.lookupClass((Declarator)plist.head());
                 plist = plist.tail();
             }
         }
+
         return params;
     }
-    
-    public CtClass[] makeThrowsList(final MethodDecl md) throws CompileError {
+
+    public CtClass[] makeThrowsList(MethodDecl md) throws CompileError {
+        CtClass[] clist;
         ASTList list = md.getThrows();
-        if (list == null) {
+        if (list == null)
             return null;
-        }
-        int i = 0;
-        final CtClass[] clist = new CtClass[list.length()];
-        while (list != null) {
-            clist[i++] = this.resolver.lookupClassByName((ASTList)list.head());
-            list = list.tail();
-        }
-        return clist;
-    }
-    
-    @Override
-    protected String resolveClassName(final ASTList name) throws CompileError {
-        return this.resolver.resolveClassName(name);
-    }
-    
-    @Override
-    protected String resolveClassName(final String jvmName) throws CompileError {
-        return this.resolver.resolveJvmClassName(jvmName);
-    }
-    
-    static class JsrHook extends ReturnHook
-    {
-        ArrayList jsrList;
-        CodeGen cgen;
-        int var;
-        
-        JsrHook(final CodeGen gen) {
-            super(gen);
-            this.jsrList = new ArrayList();
-            this.cgen = gen;
-            this.var = -1;
-        }
-        
-        private int getVar(final int size) {
-            if (this.var < 0) {
-                this.var = this.cgen.getMaxLocals();
-                this.cgen.incMaxLocals(size);
+        else {
+            int i = 0;
+            clist = new CtClass[list.length()];
+            while (list != null) {
+                clist[i++] = resolver.lookupClassByName((ASTList)list.head());
+                list = list.tail();
             }
-            return this.var;
-        }
-        
-        private void jsrJmp(final Bytecode b) {
-            b.addOpcode(167);
-            this.jsrList.add(new int[] { b.currentPc(), this.var });
-            b.addIndex(0);
-        }
-        
-        @Override
-        protected boolean doit(final Bytecode b, final int opcode) {
-            switch (opcode) {
-                case 177: {
-                    this.jsrJmp(b);
-                    break;
-                }
-                case 176: {
-                    b.addAstore(this.getVar(1));
-                    this.jsrJmp(b);
-                    b.addAload(this.var);
-                    break;
-                }
-                case 172: {
-                    b.addIstore(this.getVar(1));
-                    this.jsrJmp(b);
-                    b.addIload(this.var);
-                    break;
-                }
-                case 173: {
-                    b.addLstore(this.getVar(2));
-                    this.jsrJmp(b);
-                    b.addLload(this.var);
-                    break;
-                }
-                case 175: {
-                    b.addDstore(this.getVar(2));
-                    this.jsrJmp(b);
-                    b.addDload(this.var);
-                    break;
-                }
-                case 174: {
-                    b.addFstore(this.getVar(1));
-                    this.jsrJmp(b);
-                    b.addFload(this.var);
-                    break;
-                }
-                default: {
-                    throw new RuntimeException("fatal");
-                }
-            }
-            return false;
+
+            return clist;
         }
     }
-    
-    static class JsrHook2 extends ReturnHook
-    {
-        int var;
-        int target;
-        
-        JsrHook2(final CodeGen gen, final int[] retTarget) {
-            super(gen);
-            this.target = retTarget[0];
-            this.var = retTarget[1];
-        }
-        
-        @Override
-        protected boolean doit(final Bytecode b, final int opcode) {
-            switch (opcode) {
-                case 177: {
-                    break;
-                }
-                case 176: {
-                    b.addAstore(this.var);
-                    break;
-                }
-                case 172: {
-                    b.addIstore(this.var);
-                    break;
-                }
-                case 173: {
-                    b.addLstore(this.var);
-                    break;
-                }
-                case 175: {
-                    b.addDstore(this.var);
-                    break;
-                }
-                case 174: {
-                    b.addFstore(this.var);
-                    break;
-                }
-                default: {
-                    throw new RuntimeException("fatal");
-                }
-            }
-            b.addOpcode(167);
-            b.addIndex(this.target - b.currentPc() + 3);
-            return true;
-        }
+
+    /* Converts a class name into a JVM-internal representation.
+     *
+     * It may also expand a simple class name to java.lang.*.
+     * For example, this converts Object into java/lang/Object.
+     */
+    protected String resolveClassName(ASTList name) throws CompileError {
+        return resolver.resolveClassName(name);
+    }
+
+    /* Expands a simple class name to java.lang.*.
+     * For example, this converts Object into java/lang/Object.
+     */
+    protected String resolveClassName(String jvmName) throws CompileError {
+        return resolver.resolveJvmClassName(jvmName);
     }
 }

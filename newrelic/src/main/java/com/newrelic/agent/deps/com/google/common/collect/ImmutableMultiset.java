@@ -190,7 +190,7 @@ public abstract class ImmutableMultiset<E> extends ImmutableCollection<E> implem
     }
     
     private final ImmutableSet<Entry<E>> createEntrySet() {
-        return this.isEmpty() ? ImmutableSet.of() : new EntrySet();
+        return this.isEmpty() ? ImmutableSet.<Entry<E>>of() : new EntrySet();
     }
     
     abstract Entry<E> getEntry(final int p0);
@@ -205,7 +205,7 @@ public abstract class ImmutableMultiset<E> extends ImmutableCollection<E> implem
     }
     
     static {
-        EMPTY = new RegularImmutableMultiset<Object>(ImmutableMap.of(), 0);
+        EMPTY = new RegularImmutableMultiset<Object>(ImmutableMap.<Object, Integer>of(), 0);
     }
     
     private final class EntrySet extends ImmutableSet<Entry<E>>
@@ -311,7 +311,7 @@ public abstract class ImmutableMultiset<E> extends ImmutableCollection<E> implem
         final Multiset<E> contents;
         
         public Builder() {
-            this(LinkedHashMultiset.create());
+            this(LinkedHashMultiset.<E>create());
         }
         
         Builder(final Multiset<E> contents) {

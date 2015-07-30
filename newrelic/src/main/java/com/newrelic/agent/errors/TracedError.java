@@ -67,14 +67,14 @@ public abstract class TracedError implements Comparable<TracedError>, JSONStream
     }
     
     private Map<String, Object> getUserAtts() {
-        final Map<String, Object> atts = (Map<String, Object>)Maps.newHashMap();
+        final Map<String, Object> atts = Maps.newHashMap();
         atts.putAll(this.errorAtts);
         atts.putAll(this.userAtts);
         return atts;
     }
     
     private Map<String, Object> getAgentAtts() {
-        final Map<String, Object> atts = (Map<String, Object>)Maps.newHashMap();
+        final Map<String, Object> atts = Maps.newHashMap();
         atts.putAll(this.agentAtts);
         if (this.prefixAtts != null && !this.prefixAtts.isEmpty()) {
             atts.putAll(AttributesUtils.appendAttributePrefixes(this.prefixAtts));
@@ -90,7 +90,7 @@ public abstract class TracedError implements Comparable<TracedError>, JSONStream
     }
     
     private Map<String, Object> getAttributes() {
-        final Map<String, Object> params = (Map<String, Object>)Maps.newHashMap();
+        final Map<String, Object> params = Maps.newHashMap();
         if (ServiceFactory.getAttributesService().isAttributesEnabledForErrors(this.appName)) {
             this.filterAndAddIfNotEmpty("agentAttributes", params, this.getAgentAtts());
             if (!ServiceFactory.getConfigService().getDefaultAgentConfig().isHighSecurity()) {

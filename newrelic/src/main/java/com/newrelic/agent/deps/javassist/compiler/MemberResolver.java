@@ -1,554 +1,604 @@
-// 
-// Decompiled by Procyon v0.5.29
-// 
+/*
+ * Javassist, a Java-bytecode translator toolkit.
+ * Copyright (C) 1999- Shigeru Chiba. All Rights Reserved.
+ *
+ * The contents of this file are subject to the Mozilla Public License Version
+ * 1.1 (the "License"); you may not use this file except in compliance with
+ * the License.  Alternatively, the contents of this file may be used under
+ * the terms of the GNU Lesser General Public License Version 2.1 or later,
+ * or the Apache License Version 2.0.
+ *
+ * Software distributed under the License is distributed on an "AS IS" basis,
+ * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
+ * for the specific language governing rights and limitations under the
+ * License.
+ */
 
 package com.newrelic.agent.deps.javassist.compiler;
 
-import com.newrelic.agent.deps.javassist.compiler.ast.Keyword;
-import java.util.Iterator;
-import java.lang.ref.WeakReference;
-import com.newrelic.agent.deps.javassist.compiler.ast.Declarator;
-import com.newrelic.agent.deps.javassist.compiler.ast.ASTList;
-import com.newrelic.agent.deps.javassist.CtField;
-import com.newrelic.agent.deps.javassist.compiler.ast.ASTree;
-import com.newrelic.agent.deps.javassist.compiler.ast.Symbol;
-import com.newrelic.agent.deps.javassist.bytecode.Descriptor;
-import java.util.List;
-import com.newrelic.agent.deps.javassist.bytecode.ClassFile;
-import com.newrelic.agent.deps.javassist.NotFoundException;
-import com.newrelic.agent.deps.javassist.Modifier;
-import com.newrelic.agent.deps.javassist.bytecode.MethodInfo;
-import com.newrelic.agent.deps.javassist.CtClass;
 import java.util.Hashtable;
+import java.lang.ref.WeakReference;
 import java.util.WeakHashMap;
-import com.newrelic.agent.deps.javassist.ClassPool;
+import java.util.List;
+import java.util.Iterator;
+import com.newrelic.agent.deps.javassist.*;
+import com.newrelic.agent.deps.javassist.bytecode.*;
+import com.newrelic.agent.deps.javassist.compiler.ast.*;
 
-public class MemberResolver implements TokenId
-{
+/* Code generator methods depending on javassist.* classes.
+ */
+public class MemberResolver implements TokenId {
     private ClassPool classPool;
-    private static final int YES = 0;
-    private static final int NO = -1;
-    private static final String INVALID = "<invalid>";
-    private static WeakHashMap invalidNamesMap;
-    private Hashtable invalidNames;
-    
-    public MemberResolver(final ClassPool cp) {
-        this.invalidNames = null;
-        this.classPool = cp;
+
+    public MemberResolver(ClassPool cp) {
+        classPool = cp;
     }
-    
-    public ClassPool getClassPool() {
-        return this.classPool;
-    }
-    
+
+    public ClassPool getClassPool() { return classPool; }
+
     private static void fatal() throws CompileError {
         throw new CompileError("fatal");
     }
-    
-    public Method lookupMethod(final CtClass clazz, final CtClass currentClass, final MethodInfo current, final String methodName, final int[] argTypes, final int[] argDims, final String[] argClassNames) throws CompileError {
-        Method maybe = null;
-        if (current != null && clazz == currentClass && current.getName().equals(methodName)) {
-            final int res = this.compareSignature(current.getDescriptor(), argTypes, argDims, argClassNames);
-            if (res != -1) {
-                final Method r = new Method(clazz, current, res);
-                if (res == 0) {
-                    return r;
-                }
-                maybe = r;
-            }
+
+    public static class Method {
+        public CtClass declaring;
+        public MethodInfo info;
+        public int notmatch;
+
+        public Method(CtClass c, MethodInfo i, int n) {
+            declaring = c;
+            info = i;
+            notmatch = n;
         }
-        final Method m = this.lookupMethod(clazz, methodName, argTypes, argDims, argClassNames, maybe != null);
-        if (m != null) {
-            return m;
+
+        /**
+         * Returns true if the invoked method is static.
+         */
+        public boolean isStatic() {
+            int acc = info.getAccessFlags();
+            return (acc & AccessFlag.STATIC) != 0;
         }
-        return maybe;
     }
-    
-    private Method lookupMethod(final CtClass clazz, final String methodName, final int[] argTypes, final int[] argDims, final String[] argClassNames, boolean onlyExact) throws CompileError {
+
+    public Method lookupMethod(CtClass clazz, CtClass currentClass, MethodInfo current,
+                               String methodName,
+                               int[] argTypes, int[] argDims,
+                               String[] argClassNames)
+            throws CompileError
+    {
         Method maybe = null;
-        final ClassFile cf = clazz.getClassFile2();
-        if (cf != null) {
-            final List list = cf.getMethods();
-            for (int n = list.size(), i = 0; i < n; ++i) {
-                final MethodInfo minfo = list.get(i);
-                if (minfo.getName().equals(methodName)) {
-                    final int res = this.compareSignature(minfo.getDescriptor(), argTypes, argDims, argClassNames);
-                    if (res != -1) {
-                        final Method r = new Method(clazz, minfo, res);
-                        if (res == 0) {
-                            return r;
-                        }
-                        if (maybe == null || maybe.notmatch > res) {
-                            maybe = r;
-                        }
-                    }
-                }
-            }
-        }
-        if (onlyExact) {
-            maybe = null;
-        }
-        else {
-            onlyExact = (maybe != null);
-        }
-        final int mod = clazz.getModifiers();
-        final boolean isIntf = Modifier.isInterface(mod);
-        try {
-            if (!isIntf) {
-                final CtClass pclazz = clazz.getSuperclass();
-                if (pclazz != null) {
-                    final Method r2 = this.lookupMethod(pclazz, methodName, argTypes, argDims, argClassNames, onlyExact);
-                    if (r2 != null) {
-                        return r2;
-                    }
-                }
-            }
-        }
-        catch (NotFoundException ex) {}
-        if (!isIntf) {
-            if (!Modifier.isAbstract(mod)) {
-                return maybe;
-            }
-        }
-        try {
-            final CtClass[] ifs = clazz.getInterfaces();
-            for (int size = ifs.length, j = 0; j < size; ++j) {
-                final Method r = this.lookupMethod(ifs[j], methodName, argTypes, argDims, argClassNames, onlyExact);
-                if (r != null) {
-                    return r;
-                }
-            }
-            if (isIntf) {
-                final CtClass pclazz2 = clazz.getSuperclass();
-                if (pclazz2 != null) {
-                    final Method r = this.lookupMethod(pclazz2, methodName, argTypes, argDims, argClassNames, onlyExact);
-                    if (r != null) {
+        // to enable the creation of a recursively called method
+        if (current != null && clazz == currentClass)
+            if (current.getName().equals(methodName)) {
+                int res = compareSignature(current.getDescriptor(),
+                        argTypes, argDims, argClassNames);
+                if (res != NO) {
+                    Method r = new Method(clazz, current, res);
+                    if (res == YES)
                         return r;
+                    else
+                        maybe = r;
+                }
+            }
+
+        Method m = lookupMethod(clazz, methodName, argTypes, argDims,
+                argClassNames, maybe != null);
+        if (m != null)
+            return m;
+        else
+            return maybe;
+    }
+
+    private Method lookupMethod(CtClass clazz, String methodName,
+                                int[] argTypes, int[] argDims,
+                                String[] argClassNames, boolean onlyExact)
+            throws CompileError
+    {
+        Method maybe = null;
+        ClassFile cf = clazz.getClassFile2();
+        // If the class is an array type, the class file is null.
+        // If so, search the super class java.lang.Object for clone() etc.
+        if (cf != null) {
+            List list = cf.getMethods();
+            int n = list.size();
+            for (int i = 0; i < n; ++i) {
+                MethodInfo minfo = (MethodInfo)list.get(i);
+                if (minfo.getName().equals(methodName)) {
+                    int res = compareSignature(minfo.getDescriptor(),
+                            argTypes, argDims, argClassNames);
+                    if (res != NO) {
+                        Method r = new Method(clazz, minfo, res);
+                        if (res == YES)
+                            return r;
+                        else if (maybe == null || maybe.notmatch > res)
+                            maybe = r;
                     }
                 }
             }
         }
-        catch (NotFoundException ex2) {}
+
+        if (onlyExact)
+            maybe = null;
+        else
+            onlyExact = maybe != null;
+
+        int mod = clazz.getModifiers();
+        boolean isIntf = Modifier.isInterface(mod);
+        try {
+            // skip searching java.lang.Object if clazz is an interface type.
+            if (!isIntf) {
+                CtClass pclazz = clazz.getSuperclass();
+                if (pclazz != null) {
+                    Method r = lookupMethod(pclazz, methodName, argTypes,
+                            argDims, argClassNames, onlyExact);
+                    if (r != null)
+                        return r;
+                }
+            }
+        }
+        catch (NotFoundException e) {}
+
+        if (isIntf || Modifier.isAbstract(mod))
+            try {
+                CtClass[] ifs = clazz.getInterfaces();
+                int size = ifs.length;
+                for (int i = 0; i < size; ++i) {
+                    Method r = lookupMethod(ifs[i], methodName,
+                            argTypes, argDims, argClassNames,
+                            onlyExact);
+                    if (r != null)
+                        return r;
+                }
+
+                if (isIntf) {
+                    // finally search java.lang.Object.
+                    CtClass pclazz = clazz.getSuperclass();
+                    if (pclazz != null) {
+                        Method r = lookupMethod(pclazz, methodName, argTypes,
+                                argDims, argClassNames, onlyExact);
+                        if (r != null)
+                            return r;
+                    }
+                }
+            }
+            catch (NotFoundException e) {}
+
         return maybe;
     }
-    
-    private int compareSignature(final String desc, final int[] argTypes, final int[] argDims, final String[] argClassNames) throws CompileError {
-        int result = 0;
+
+    private static final int YES = 0;
+    private static final int NO = -1;
+
+    /*
+     * Returns YES if actual parameter types matches the given signature.
+     *
+     * argTypes, argDims, and argClassNames represent actual parameters.
+     *
+     * This method does not correctly implement the Java method dispatch
+     * algorithm.
+     *
+     * If some of the parameter types exactly match but others are subtypes of
+     * the corresponding type in the signature, this method returns the number
+     * of parameter types that do not exactly match.
+     */
+    private int compareSignature(String desc, int[] argTypes,
+                                 int[] argDims, String[] argClassNames)
+            throws CompileError
+    {
+        int result = YES;
         int i = 1;
-        final int nArgs = argTypes.length;
-        if (nArgs != Descriptor.numOfParameters(desc)) {
-            return -1;
-        }
-        final int len = desc.length();
-        int n = 0;
-        while (i < len) {
+        int nArgs = argTypes.length;
+        if (nArgs != Descriptor.numOfParameters(desc))
+            return NO;
+
+        int len = desc.length();
+        for (int n = 0; i < len; ++n) {
             char c = desc.charAt(i++);
-            if (c == ')') {
-                return (n == nArgs) ? result : -1;
-            }
-            if (n >= nArgs) {
-                return -1;
-            }
+            if (c == ')')
+                return (n == nArgs ? result : NO);
+            else if (n >= nArgs)
+                return NO;
+
             int dim = 0;
             while (c == '[') {
                 ++dim;
                 c = desc.charAt(i++);
             }
-            if (argTypes[n] == 412) {
-                if (dim == 0 && c != 'L') {
-                    return -1;
-                }
-                if (c == 'L') {
-                    i = desc.indexOf(59, i) + 1;
-                }
+
+            if (argTypes[n] == NULL) {
+                if (dim == 0 && c != 'L')
+                    return NO;
+
+                if (c == 'L')
+                    i = desc.indexOf(';', i) + 1;
             }
             else if (argDims[n] != dim) {
-                if (dim != 0 || c != 'L' || !desc.startsWith("java/lang/Object;", i)) {
-                    return -1;
-                }
-                i = desc.indexOf(59, i) + 1;
-                ++result;
-                if (i <= 0) {
-                    return -1;
-                }
+                if (!(dim == 0 && c == 'L'
+                        && desc.startsWith("java/lang/Object;", i)))
+                    return NO;
+
+                // if the thread reaches here, c must be 'L'.
+                i = desc.indexOf(';', i) + 1;
+                result++;
+                if (i <= 0)
+                    return NO;  // invalid descriptor?
             }
-            else if (c == 'L') {
-                final int j = desc.indexOf(59, i);
-                if (j < 0 || argTypes[n] != 307) {
-                    return -1;
-                }
-                final String cname = desc.substring(i, j);
-                if (!cname.equals(argClassNames[n])) {
-                    final CtClass clazz = this.lookupClassByJvmName(argClassNames[n]);
-                    try {
-                        if (!clazz.subtypeOf(this.lookupClassByJvmName(cname))) {
-                            return -1;
+            else if (c == 'L') {        // not compare
+                    int j = desc.indexOf(';', i);
+                    if (j < 0 || argTypes[n] != CLASS)
+                        return NO;
+
+                    String cname = desc.substring(i, j);
+                    if (!cname.equals(argClassNames[n])) {
+                        CtClass clazz = lookupClassByJvmName(argClassNames[n]);
+                        try {
+                            if (clazz.subtypeOf(lookupClassByJvmName(cname)))
+                                result++;
+                            else
+                                return NO;
                         }
-                        ++result;
+                        catch (NotFoundException e) {
+                            result++; // should be NO?
+                        }
                     }
-                    catch (NotFoundException e) {
-                        ++result;
-                    }
+
+                    i = j + 1;
                 }
-                i = j + 1;
-            }
-            else {
-                final int t = descToType(c);
-                final int at = argTypes[n];
-                if (t != at) {
-                    if (t != 324 || (at != 334 && at != 303 && at != 306)) {
-                        return -1;
-                    }
-                    ++result;
+                else {
+                    int t = descToType(c);
+                    int at = argTypes[n];
+                    if (t != at)
+                        if (t == INT
+                                && (at == SHORT || at == BYTE || at == CHAR))
+                            result++;
+                        else
+                            return NO;
                 }
-            }
-            ++n;
         }
-        return -1;
+
+        return NO;
     }
-    
-    public CtField lookupFieldByJvmName2(String jvmClassName, final Symbol fieldSym, final ASTree expr) throws NoFieldException {
-        final String field = fieldSym.get();
+
+    /**
+     * Only used by fieldAccess() in MemberCodeGen and TypeChecker.
+     *
+     * @param jvmClassName  a JVM class name.  e.g. java/lang/String
+     * @see #lookupClass(String, boolean)
+     */
+    public CtField lookupFieldByJvmName2(String jvmClassName, Symbol fieldSym,
+                                         ASTree expr) throws NoFieldException
+    {
+        String field = fieldSym.get();
         CtClass cc = null;
         try {
-            cc = this.lookupClass(jvmToJavaName(jvmClassName), true);
+            cc = lookupClass(jvmToJavaName(jvmClassName), true);
         }
         catch (CompileError e) {
+            // EXPR might be part of a qualified class name.
             throw new NoFieldException(jvmClassName + "/" + field, expr);
         }
+
         try {
             return cc.getField(field);
         }
-        catch (NotFoundException e2) {
+        catch (NotFoundException e) {
+            // maybe an inner class.
             jvmClassName = javaToJvmName(cc.getName());
             throw new NoFieldException(jvmClassName + "$" + field, expr);
         }
     }
-    
-    public CtField lookupFieldByJvmName(final String jvmClassName, final Symbol fieldName) throws CompileError {
-        return this.lookupField(jvmToJavaName(jvmClassName), fieldName);
+
+    /**
+     * @param jvmClassName  a JVM class name.  e.g. java/lang/String
+     */
+    public CtField lookupFieldByJvmName(String jvmClassName, Symbol fieldName)
+            throws CompileError
+    {
+        return lookupField(jvmToJavaName(jvmClassName), fieldName);
     }
-    
-    public CtField lookupField(final String className, final Symbol fieldName) throws CompileError {
-        final CtClass cc = this.lookupClass(className, false);
+
+    /**
+     * @param name      a qualified class name. e.g. java.lang.String
+     */
+    public CtField lookupField(String className, Symbol fieldName)
+            throws CompileError
+    {
+        CtClass cc = lookupClass(className, false);
         try {
             return cc.getField(fieldName.get());
         }
-        catch (NotFoundException e) {
-            throw new CompileError("no such field: " + fieldName.get());
-        }
+        catch (NotFoundException e) {}
+        throw new CompileError("no such field: " + fieldName.get());
     }
-    
-    public CtClass lookupClassByName(final ASTList name) throws CompileError {
-        return this.lookupClass(Declarator.astToClassName(name, '.'), false);
+
+    public CtClass lookupClassByName(ASTList name) throws CompileError {
+        return lookupClass(Declarator.astToClassName(name, '.'), false);
     }
-    
-    public CtClass lookupClassByJvmName(final String jvmName) throws CompileError {
-        return this.lookupClass(jvmToJavaName(jvmName), false);
+
+    public CtClass lookupClassByJvmName(String jvmName) throws CompileError {
+        return lookupClass(jvmToJavaName(jvmName), false);
     }
-    
-    public CtClass lookupClass(final Declarator decl) throws CompileError {
-        return this.lookupClass(decl.getType(), decl.getArrayDim(), decl.getClassName());
+
+    public CtClass lookupClass(Declarator decl) throws CompileError {
+        return lookupClass(decl.getType(), decl.getArrayDim(),
+                decl.getClassName());
     }
-    
-    public CtClass lookupClass(final int type, int dim, final String classname) throws CompileError {
+
+    /**
+     * @parma classname         jvm class name.
+     */
+    public CtClass lookupClass(int type, int dim, String classname)
+            throws CompileError
+    {
         String cname = "";
-        if (type == 307) {
-            final CtClass clazz = this.lookupClassByJvmName(classname);
-            if (dim <= 0) {
+        CtClass clazz;
+        if (type == CLASS) {
+            clazz = lookupClassByJvmName(classname);
+            if (dim > 0)
+                cname = clazz.getName();
+            else
                 return clazz;
-            }
-            cname = clazz.getName();
         }
-        else {
+        else
             cname = getTypeName(type);
-        }
-        while (dim-- > 0) {
+
+        while (dim-- > 0)
             cname += "[]";
-        }
-        return this.lookupClass(cname, false);
+
+        return lookupClass(cname, false);
     }
-    
-    static String getTypeName(final int type) throws CompileError {
+
+    /*
+     * type cannot be CLASS
+     */
+    static String getTypeName(int type) throws CompileError {
         String cname = "";
         switch (type) {
-            case 301: {
+            case BOOLEAN :
                 cname = "boolean";
                 break;
-            }
-            case 306: {
+            case CHAR :
                 cname = "char";
                 break;
-            }
-            case 303: {
+            case BYTE :
                 cname = "byte";
                 break;
-            }
-            case 334: {
+            case SHORT :
                 cname = "short";
                 break;
-            }
-            case 324: {
+            case INT :
                 cname = "int";
                 break;
-            }
-            case 326: {
+            case LONG :
                 cname = "long";
                 break;
-            }
-            case 317: {
+            case FLOAT :
                 cname = "float";
                 break;
-            }
-            case 312: {
+            case DOUBLE :
                 cname = "double";
                 break;
-            }
-            case 344: {
+            case VOID :
                 cname = "void";
                 break;
-            }
-            default: {
+            default :
                 fatal();
-                break;
-            }
         }
+
         return cname;
     }
-    
-    public CtClass lookupClass(final String name, final boolean notCheckInner) throws CompileError {
-        final Hashtable cache = this.getInvalidNames();
-        final Object found = cache.get(name);
-        if (found == "<invalid>") {
+
+    /**
+     * @param name      a qualified class name. e.g. java.lang.String
+     */
+    public CtClass lookupClass(String name, boolean notCheckInner)
+            throws CompileError
+    {
+        Hashtable cache = getInvalidNames();
+        Object found = cache.get(name);
+        if (found == INVALID)
             throw new CompileError("no such class: " + name);
-        }
-        if (found != null) {
+        else if (found != null)
             try {
-                return this.classPool.get((String)found);
+                return classPool.get((String)found);
             }
-            catch (NotFoundException ex) {}
-        }
+            catch (NotFoundException e) {}
+
         CtClass cc = null;
         try {
-            cc = this.lookupClass0(name, notCheckInner);
+            cc = lookupClass0(name, notCheckInner);
         }
         catch (NotFoundException e) {
-            cc = this.searchImports(name);
+            cc = searchImports(name);
         }
+
         cache.put(name, cc.getName());
         return cc;
     }
-    
-    public static int getInvalidMapSize() {
-        return MemberResolver.invalidNamesMap.size();
-    }
-    
+
+    private static final String INVALID = "<invalid>";
+    private static WeakHashMap invalidNamesMap = new WeakHashMap();
+    private Hashtable invalidNames = null;
+
+    // for unit tests
+    public static int getInvalidMapSize() { return invalidNamesMap.size(); }
+
     private Hashtable getInvalidNames() {
-        Hashtable ht = this.invalidNames;
+        Hashtable ht = invalidNames;
         if (ht == null) {
             synchronized (MemberResolver.class) {
-                final WeakReference ref = MemberResolver.invalidNamesMap.get(this.classPool);
-                if (ref != null) {
+                WeakReference ref = (WeakReference)invalidNamesMap.get(classPool);
+                if (ref != null)
                     ht = (Hashtable)ref.get();
-                }
+
                 if (ht == null) {
                     ht = new Hashtable();
-                    MemberResolver.invalidNamesMap.put(this.classPool, new WeakReference<Hashtable>(ht));
+                    invalidNamesMap.put(classPool, new WeakReference(ht));
                 }
             }
-            this.invalidNames = ht;
+
+            invalidNames = ht;
         }
+
         return ht;
     }
-    
-    private CtClass searchImports(final String orgName) throws CompileError {
-        if (orgName.indexOf(46) < 0) {
-            final Iterator it = this.classPool.getImportedPackages();
+
+    private CtClass searchImports(String orgName)
+            throws CompileError
+    {
+        if (orgName.indexOf('.') < 0) {
+            Iterator it = classPool.getImportedPackages();
             while (it.hasNext()) {
-                final String pac = it.next();
-                final String fqName = pac + '.' + orgName;
+                String pac = (String)it.next();
+                String fqName = pac + '.' + orgName;
                 try {
-                    return this.classPool.get(fqName);
+                    return classPool.get(fqName);
                 }
                 catch (NotFoundException e) {
                     try {
-                        if (pac.endsWith("." + orgName)) {
-                            return this.classPool.get(pac);
-                        }
-                        continue;
+                        if (pac.endsWith("." + orgName))
+                            return classPool.get(pac);
                     }
-                    catch (NotFoundException ex) {}
-                    continue;
+                    catch (NotFoundException e2) {}
                 }
-                break;
             }
         }
-        this.getInvalidNames().put(orgName, "<invalid>");
+
+        getInvalidNames().put(orgName, INVALID);
         throw new CompileError("no such class: " + orgName);
     }
-    
-    private CtClass lookupClass0(String classname, final boolean notCheckInner) throws NotFoundException {
+
+    private CtClass lookupClass0(String classname, boolean notCheckInner)
+            throws NotFoundException
+    {
         CtClass cc = null;
         do {
             try {
-                cc = this.classPool.get(classname);
+                cc = classPool.get(classname);
             }
             catch (NotFoundException e) {
-                final int i = classname.lastIndexOf(46);
-                if (notCheckInner || i < 0) {
+                int i = classname.lastIndexOf('.');
+                if (notCheckInner || i < 0)
                     throw e;
+                else {
+                    StringBuffer sbuf = new StringBuffer(classname);
+                    sbuf.setCharAt(i, '$');
+                    classname = sbuf.toString();
                 }
-                final StringBuffer sbuf = new StringBuffer(classname);
-                sbuf.setCharAt(i, '$');
-                classname = sbuf.toString();
             }
         } while (cc == null);
         return cc;
     }
-    
-    public String resolveClassName(final ASTList name) throws CompileError {
-        if (name == null) {
+
+    /* Converts a class name into a JVM-internal representation.
+     *
+     * It may also expand a simple class name to java.lang.*.
+     * For example, this converts Object into java/lang/Object.
+     */
+    public String resolveClassName(ASTList name) throws CompileError {
+        if (name == null)
             return null;
-        }
-        return javaToJvmName(this.lookupClassByName(name).getName());
+        else
+            return javaToJvmName(lookupClassByName(name).getName());
     }
-    
-    public String resolveJvmClassName(final String jvmName) throws CompileError {
-        if (jvmName == null) {
+
+    /* Expands a simple class name to java.lang.*.
+     * For example, this converts Object into java/lang/Object.
+     */
+    public String resolveJvmClassName(String jvmName) throws CompileError {
+        if (jvmName == null)
             return null;
-        }
-        return javaToJvmName(this.lookupClassByJvmName(jvmName).getName());
+        else
+            return javaToJvmName(lookupClassByJvmName(jvmName).getName());
     }
-    
-    public static CtClass getSuperclass(final CtClass c) throws CompileError {
+
+    public static CtClass getSuperclass(CtClass c) throws CompileError {
         try {
-            final CtClass sc = c.getSuperclass();
-            if (sc != null) {
+            CtClass sc = c.getSuperclass();
+            if (sc != null)
                 return sc;
-            }
         }
-        catch (NotFoundException ex) {}
-        throw new CompileError("cannot find the super class of " + c.getName());
+        catch (NotFoundException e) {}
+        throw new CompileError("cannot find the super class of "
+                + c.getName());
     }
-    
-    public static String javaToJvmName(final String classname) {
+
+    public static String javaToJvmName(String classname) {
         return classname.replace('.', '/');
     }
-    
-    public static String jvmToJavaName(final String classname) {
+
+    public static String jvmToJavaName(String classname) {
         return classname.replace('/', '.');
     }
-    
-    public static int descToType(final char c) throws CompileError {
+
+    public static int descToType(char c) throws CompileError {
         switch (c) {
-            case 'Z': {
-                return 301;
-            }
-            case 'C': {
-                return 306;
-            }
-            case 'B': {
-                return 303;
-            }
-            case 'S': {
-                return 334;
-            }
-            case 'I': {
-                return 324;
-            }
-            case 'J': {
-                return 326;
-            }
-            case 'F': {
-                return 317;
-            }
-            case 'D': {
-                return 312;
-            }
-            case 'V': {
-                return 344;
-            }
-            case 'L':
-            case '[': {
-                return 307;
-            }
-            default: {
+            case 'Z' :
+                return BOOLEAN;
+            case 'C' :
+                return CHAR;
+            case 'B' :
+                return  BYTE;
+            case 'S' :
+                return SHORT;
+            case 'I' :
+                return INT;
+            case 'J' :
+                return LONG;
+            case 'F' :
+                return FLOAT;
+            case 'D' :
+                return DOUBLE;
+            case 'V' :
+                return VOID;
+            case 'L' :
+            case '[' :
+                return CLASS;
+            default :
                 fatal();
-                return 344;
-            }
+                return VOID;    // never reach here
         }
     }
-    
+
     public static int getModifiers(ASTList mods) {
         int m = 0;
         while (mods != null) {
-            final Keyword k = (Keyword)mods.head();
+            Keyword k = (Keyword)mods.head();
             mods = mods.tail();
             switch (k.get()) {
-                case 335: {
-                    m |= 0x8;
-                    continue;
-                }
-                case 315: {
-                    m |= 0x10;
-                    continue;
-                }
-                case 338: {
-                    m |= 0x20;
-                    continue;
-                }
-                case 300: {
-                    m |= 0x400;
-                    continue;
-                }
-                case 332: {
-                    m |= 0x1;
-                    continue;
-                }
-                case 331: {
-                    m |= 0x4;
-                    continue;
-                }
-                case 330: {
-                    m |= 0x2;
-                    continue;
-                }
-                case 345: {
-                    m |= 0x40;
-                    continue;
-                }
-                case 342: {
-                    m |= 0x80;
-                    continue;
-                }
-                case 347: {
-                    m |= 0x800;
-                    continue;
-                }
+                case STATIC :
+                    m |= Modifier.STATIC;
+                    break;
+                case FINAL :
+                    m |= Modifier.FINAL;
+                    break;
+                case SYNCHRONIZED :
+                    m |= Modifier.SYNCHRONIZED;
+                    break;
+                case ABSTRACT :
+                    m |= Modifier.ABSTRACT;
+                    break;
+                case PUBLIC :
+                    m |= Modifier.PUBLIC;
+                    break;
+                case PROTECTED :
+                    m |= Modifier.PROTECTED;
+                    break;
+                case PRIVATE :
+                    m |= Modifier.PRIVATE;
+                    break;
+                case VOLATILE :
+                    m |= Modifier.VOLATILE;
+                    break;
+                case TRANSIENT :
+                    m |= Modifier.TRANSIENT;
+                    break;
+                case STRICT :
+                    m |= Modifier.STRICT;
+                    break;
             }
         }
+
         return m;
-    }
-    
-    static {
-        MemberResolver.invalidNamesMap = new WeakHashMap();
-    }
-    
-    public static class Method
-    {
-        public CtClass declaring;
-        public MethodInfo info;
-        public int notmatch;
-        
-        public Method(final CtClass c, final MethodInfo i, final int n) {
-            this.declaring = c;
-            this.info = i;
-            this.notmatch = n;
-        }
-        
-        public boolean isStatic() {
-            final int acc = this.info.getAccessFlags();
-            return (acc & 0x8) != 0x0;
-        }
     }
 }

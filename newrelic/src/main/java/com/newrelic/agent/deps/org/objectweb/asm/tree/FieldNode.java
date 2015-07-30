@@ -103,19 +103,19 @@ public class FieldNode extends FieldVisitor
             return;
         }
         for (int n = (this.visibleAnnotations == null) ? 0 : this.visibleAnnotations.size(), i = 0; i < n; ++i) {
-            final AnnotationNode annotationNode = this.visibleAnnotations.get(i);
+            final AnnotationNode annotationNode = (AnnotationNode) this.visibleAnnotations.get(i);
             annotationNode.accept(visitField.visitAnnotation(annotationNode.desc, true));
         }
         for (int n2 = (this.invisibleAnnotations == null) ? 0 : this.invisibleAnnotations.size(), j = 0; j < n2; ++j) {
-            final AnnotationNode annotationNode2 = this.invisibleAnnotations.get(j);
+            final AnnotationNode annotationNode2 = (AnnotationNode) this.invisibleAnnotations.get(j);
             annotationNode2.accept(visitField.visitAnnotation(annotationNode2.desc, false));
         }
         for (int n3 = (this.visibleTypeAnnotations == null) ? 0 : this.visibleTypeAnnotations.size(), k = 0; k < n3; ++k) {
-            final TypeAnnotationNode typeAnnotationNode = this.visibleTypeAnnotations.get(k);
+            final TypeAnnotationNode typeAnnotationNode = (TypeAnnotationNode) this.visibleTypeAnnotations.get(k);
             typeAnnotationNode.accept(visitField.visitTypeAnnotation(typeAnnotationNode.typeRef, typeAnnotationNode.typePath, typeAnnotationNode.desc, true));
         }
         for (int n4 = (this.invisibleTypeAnnotations == null) ? 0 : this.invisibleTypeAnnotations.size(), l = 0; l < n4; ++l) {
-            final TypeAnnotationNode typeAnnotationNode2 = this.invisibleTypeAnnotations.get(l);
+            final TypeAnnotationNode typeAnnotationNode2 = (TypeAnnotationNode) this.invisibleTypeAnnotations.get(l);
             typeAnnotationNode2.accept(visitField.visitTypeAnnotation(typeAnnotationNode2.typeRef, typeAnnotationNode2.typePath, typeAnnotationNode2.desc, false));
         }
         for (int n5 = (this.attrs == null) ? 0 : this.attrs.size(), n6 = 0; n6 < n5; ++n6) {

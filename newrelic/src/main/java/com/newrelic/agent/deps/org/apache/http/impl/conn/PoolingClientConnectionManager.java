@@ -93,7 +93,7 @@ public class PoolingClientConnectionManager implements ClientConnectionManager, 
     private String formatStats(final HttpRoute route) {
         final StringBuilder buf = new StringBuilder();
         final PoolStats totals = this.pool.getTotalStats();
-        final PoolStats stats = ((AbstractConnPool<HttpRoute, C, E>)this.pool).getStats(route);
+        final PoolStats stats = this.pool.getStats(route);
         buf.append("[total kept alive: ").append(totals.getAvailable()).append("; ");
         buf.append("route allocated: ").append(stats.getLeased() + stats.getAvailable());
         buf.append(" of ").append(stats.getMax()).append("; ");
@@ -105,7 +105,7 @@ public class PoolingClientConnectionManager implements ClientConnectionManager, 
     private String format(final HttpPoolEntry entry) {
         final StringBuilder buf = new StringBuilder();
         buf.append("[id: ").append(entry.getId()).append("]");
-        buf.append("[route: ").append(((PoolEntry<Object, C>)entry).getRoute()).append("]");
+        buf.append("[route: ").append((entry).getRoute()).append("]");
         final Object state = entry.getState();
         if (state != null) {
             buf.append("[state: ").append(state).append("]");
@@ -118,7 +118,7 @@ public class PoolingClientConnectionManager implements ClientConnectionManager, 
         if (this.log.isDebugEnabled()) {
             this.log.debug("Connection request: " + this.format(route, state) + this.formatStats(route));
         }
-        final Future<HttpPoolEntry> future = ((AbstractConnPool<HttpRoute, C, HttpPoolEntry>)this.pool).lease(route, state);
+        final Future<HttpPoolEntry> future = this.pool.lease(route, state);
         return new ClientConnectionRequest() {
             public void abortRequest() {
                 future.cancel(true);
@@ -136,9 +136,9 @@ public class PoolingClientConnectionManager implements ClientConnectionManager, 
             if (entry == null || future.isCancelled()) {
                 throw new InterruptedException();
             }
-            Asserts.check(((PoolEntry<T, OperatedClientConnection>)entry).getConnection() != null, "Pool entry with no connection");
+            Asserts.check(entry.getConnection() != null, "Pool entry with no connection");
             if (this.log.isDebugEnabled()) {
-                this.log.debug("Connection leased: " + this.format(entry) + this.formatStats(((PoolEntry<HttpRoute, C>)entry).getRoute()));
+                this.log.debug("Connection leased: " + this.format(entry) + this.formatStats(entry.getRoute()));
             }
             return new ManagedClientConnectionImpl(this, this.operator, entry);
         }
@@ -190,10 +190,10 @@ public class PoolingClientConnectionManager implements ClientConnectionManager, 
                 }
             }
             finally {
-                ((AbstractConnPool<T, C, HttpPoolEntry>)this.pool).release(entry, managedConn.isMarkedReusable());
+                this.pool.release(entry, managedConn.isMarkedReusable());
             }
             if (this.log.isDebugEnabled()) {
-                this.log.debug("Connection released: " + this.format(entry) + this.formatStats(((PoolEntry<HttpRoute, C>)entry).getRoute()));
+                this.log.debug("Connection released: " + this.format(entry) + this.formatStats(entry.getRoute()));
             }
         }
     }
@@ -238,11 +238,11 @@ public class PoolingClientConnectionManager implements ClientConnectionManager, 
     }
     
     public int getMaxPerRoute(final HttpRoute route) {
-        return ((AbstractConnPool<HttpRoute, C, E>)this.pool).getMaxPerRoute(route);
+        return this.pool.getMaxPerRoute(route);
     }
     
     public void setMaxPerRoute(final HttpRoute route, final int max) {
-        ((AbstractConnPool<HttpRoute, C, E>)this.pool).setMaxPerRoute(route, max);
+        this.pool.setMaxPerRoute(route, max);
     }
     
     public PoolStats getTotalStats() {
@@ -250,6 +250,6 @@ public class PoolingClientConnectionManager implements ClientConnectionManager, 
     }
     
     public PoolStats getStats(final HttpRoute route) {
-        return ((AbstractConnPool<HttpRoute, C, E>)this.pool).getStats(route);
+        return this.pool.getStats(route);
     }
 }

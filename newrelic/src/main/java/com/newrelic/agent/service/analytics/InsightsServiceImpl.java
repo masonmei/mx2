@@ -168,7 +168,7 @@ public class InsightsServiceImpl extends AbstractService implements InsightsServ
         final ReserviorSampledArrayList<CustomInsightsEvent> reservoir = this.reservoirForApp.put(appName, new ReserviorSampledArrayList<CustomInsightsEvent>(this.maxSamplesStored));
         if (reservoir != null && reservoir.size() > 0) {
             try {
-                ServiceFactory.getRPMService(appName).sendCustomAnalyticsEvents((Collection<CustomInsightsEvent>)Collections.unmodifiableList((List<?>)reservoir));
+                ServiceFactory.getRPMService(appName).sendCustomAnalyticsEvents(Collections.unmodifiableList(reservoir));
                 statsEngine.getStats("Supportability/Events/Customer/Sent").incrementCallCount(reservoir.size());
                 statsEngine.getStats("Supportability/Events/Customer/Seen").incrementCallCount(reservoir.getNumberOfTries());
                 if (reservoir.size() < reservoir.getNumberOfTries()) {
@@ -178,7 +178,7 @@ public class InsightsServiceImpl extends AbstractService implements InsightsServ
             catch (Exception e) {
                 Agent.LOG.fine("Unable to send custom events. Unsent events will be included in the next harvest.");
                 final ReserviorSampledArrayList<CustomInsightsEvent> currentReservoir = this.reservoirForApp.get(appName);
-                currentReservoir.addAll((Collection<?>)reservoir);
+                currentReservoir.addAll(reservoir);
             }
         }
     }
@@ -193,10 +193,10 @@ public class InsightsServiceImpl extends AbstractService implements InsightsServ
     }
     
     private static Map<String, Object> copyAndInternStrings(final Map<String, Object> attributes) {
-        final Map<String, Object> result = (Map<String, Object>)Maps.newHashMap();
+        final Map<String, Object> result = Maps.newHashMap();
         for (final Map.Entry<String, Object> entry : attributes.entrySet()) {
             if (entry.getValue() instanceof String) {
-                result.put(mapInternString(entry.getKey()), mapInternString(entry.getValue()));
+                result.put(mapInternString(entry.getKey()), mapInternString((String) entry.getValue()));
             }
             else {
                 result.put(mapInternString(entry.getKey()), entry.getValue());

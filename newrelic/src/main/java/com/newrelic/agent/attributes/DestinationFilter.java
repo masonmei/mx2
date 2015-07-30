@@ -4,7 +4,6 @@
 
 package com.newrelic.agent.attributes;
 
-import com.newrelic.agent.deps.com.google.common.base.Predicate;
 import com.newrelic.agent.deps.com.google.common.collect.Maps;
 import java.util.Map;
 import java.util.Collections;
@@ -66,6 +65,6 @@ public class DestinationFilter
     }
     
     private Map<String, ?> filterAttributes(final Map<String, ?> values, final DestinationPredicate predicate) {
-        return (this.isEnabled && values != null && !values.isEmpty()) ? Maps.filterKeys(values, predicate) : Collections.emptyMap();
+        return (this.isEnabled && values != null && !values.isEmpty()) ? Maps.filterKeys(values, predicate) : Collections.<String, Object>emptyMap();
     }
 }

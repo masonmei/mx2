@@ -409,7 +409,7 @@ class CtClassType extends CtClass
         }
         final String thisName = cf.getName() + "$";
         final int n = ica.tableLength();
-        final ArrayList list = new ArrayList(n);
+        final ArrayList<CtClass> list = new ArrayList<CtClass>(n);
         for (int i = 0; i < n; ++i) {
             final String name = ica.innerClass(i);
             if (name != null && name.startsWith(thisName) && name.lastIndexOf(36) < thisName.length()) {
@@ -805,12 +805,12 @@ class CtClassType extends CtClass
     }
     
     protected synchronized CtMember.Cache getMembers() {
-        CtMember.Cache cache = null;
+        CtMember.Cache cache;
         if (this.memberCache == null || (cache = (CtMember.Cache)this.memberCache.get()) == null) {
             cache = new CtMember.Cache(this);
             this.makeFieldCache(cache);
             this.makeBehaviorCache(cache);
-            this.memberCache = new WeakReference((T)cache);
+            this.memberCache = new WeakReference(cache);
         }
         return cache;
     }
@@ -818,7 +818,7 @@ class CtClassType extends CtClass
     private void makeFieldCache(final CtMember.Cache cache) {
         final List list = this.getClassFile2().getFields();
         for (int n = list.size(), i = 0; i < n; ++i) {
-            final FieldInfo finfo = list.get(i);
+            final FieldInfo finfo = (FieldInfo) list.get(i);
             final CtField newField = new CtField(finfo, this);
             cache.addField(newField);
         }
@@ -827,7 +827,7 @@ class CtClassType extends CtClass
     private void makeBehaviorCache(final CtMember.Cache cache) {
         final List list = this.getClassFile2().getMethods();
         for (int n = list.size(), i = 0; i < n; ++i) {
-            final MethodInfo minfo = list.get(i);
+            final MethodInfo minfo = (MethodInfo) list.get(i);
             if (minfo.isMethod()) {
                 final CtMethod newMethod = new CtMethod(minfo, this);
                 cache.addMethod(newMethod);
@@ -841,7 +841,7 @@ class CtClassType extends CtClass
     
     @Override
     public CtField[] getFields() {
-        final ArrayList alist = new ArrayList();
+        final ArrayList<CtField> alist = new ArrayList<CtField>();
         getFields(alist, this);
         return alist.toArray(new CtField[alist.size()]);
     }
@@ -1323,7 +1323,7 @@ class CtClassType extends CtClass
         final ConstPool cp = cf.getConstPool();
         final List list = cf.getMethods();
         for (int n = list.size(), i = 0; i < n; ++i) {
-            final MethodInfo minfo = list.get(i);
+            final MethodInfo minfo = (MethodInfo) list.get(i);
             converter.doit(this, minfo, cp);
         }
     }
@@ -1334,7 +1334,7 @@ class CtClassType extends CtClass
         final ClassFile cf = this.getClassFile2();
         final List list = cf.getMethods();
         for (int n = list.size(), i = 0; i < n; ++i) {
-            final MethodInfo minfo = list.get(i);
+            final MethodInfo minfo = (MethodInfo) list.get(i);
             editor.doit(this, minfo);
         }
     }
@@ -1490,7 +1490,7 @@ class CtClassType extends CtClass
         final ConstPool cp = cf.getConstPool();
         final List list = cf.getMethods();
         for (int n = list.size(), i = 0; i < n; ++i) {
-            final MethodInfo minfo = list.get(i);
+            final MethodInfo minfo = (MethodInfo) list.get(i);
             if (minfo.isConstructor()) {
                 final CodeAttribute codeAttr = minfo.getCodeAttribute();
                 if (codeAttr != null) {
@@ -1613,12 +1613,12 @@ class CtClassType extends CtClass
         }
         List list = this.getClassFile2().getMethods();
         for (int n = list.size(), i = 0; i < n; ++i) {
-            final MethodInfo minfo = list.get(i);
+            final MethodInfo minfo = (MethodInfo) list.get(i);
             table.put(minfo.getName(), this);
         }
         list = this.getClassFile2().getFields();
         for (int n = list.size(), i = 0; i < n; ++i) {
-            final FieldInfo finfo = list.get(i);
+            final FieldInfo finfo = (FieldInfo) list.get(i);
             table.put(finfo.getName(), this);
         }
     }

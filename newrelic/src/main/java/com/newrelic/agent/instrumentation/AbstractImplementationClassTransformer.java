@@ -48,12 +48,12 @@ public abstract class AbstractImplementationClassTransformer implements Startabl
         this(classTransformer, enabled, interfaceToImplement, getClassMatcher(interfaceToImplement), getSkipClassMatcher(interfaceToImplement), getOriginalInterface(interfaceToImplement));
     }
     
-    private static String getOriginalInterface(final Class interfaceToImplement) {
+    private static String getOriginalInterface(final Class<?> interfaceToImplement) {
         final InterfaceMapper interfaceMapper = interfaceToImplement.getAnnotation(InterfaceMapper.class);
         return interfaceMapper.originalInterfaceName();
     }
     
-    private static ClassMatcher getClassMatcher(final Class interfaceToImplement) {
+    private static ClassMatcher getClassMatcher(final Class<?> interfaceToImplement) {
         final InterfaceMapper interfaceMapper = interfaceToImplement.getAnnotation(InterfaceMapper.class);
         if (interfaceMapper.className().length == 0) {
             return new ExactClassMatcher(interfaceMapper.originalInterfaceName());
@@ -61,7 +61,7 @@ public abstract class AbstractImplementationClassTransformer implements Startabl
         return ExactClassMatcher.or(interfaceMapper.className());
     }
     
-    private static ClassMatcher getSkipClassMatcher(final Class interfaceToImplement) {
+    private static ClassMatcher getSkipClassMatcher(final Class<?> interfaceToImplement) {
         final InterfaceMapper interfaceMapper = interfaceToImplement.getAnnotation(InterfaceMapper.class);
         return ExactClassMatcher.or(interfaceMapper.skip());
     }

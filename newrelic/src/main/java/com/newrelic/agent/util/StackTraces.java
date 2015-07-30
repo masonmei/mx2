@@ -107,7 +107,7 @@ public class StackTraces
         if (elements.size() <= maxDepth) {
             return elements;
         }
-        final int bottomLimit = (int)(Object)Double.valueOf(Math.floor(maxDepth / 3));
+        final int bottomLimit = Double.valueOf(Math.floor(maxDepth / 3)).intValue();
         final int topLimit = maxDepth - bottomLimit;
         final List<StackTraceElement> topStack = elements.subList(0, topLimit);
         final List<StackTraceElement> bottomStack = elements.subList(elements.size() - bottomLimit, elements.size());
@@ -125,7 +125,7 @@ public class StackTraces
     
     public static Collection<String> stackTracesToStrings(final StackTraceElement[] stackTraces) {
         if (stackTraces == null || stackTraces.length == 0) {
-            return (Collection<String>)Collections.emptyList();
+            return Collections.emptyList();
         }
         final List<String> lines = new ArrayList<String>(stackTraces.length);
         for (final StackTraceElement e : stackTraces) {

@@ -34,7 +34,7 @@ public class JarCollectorServiceImpl extends AbstractService implements JarColle
     private final AtomicReference<Map<String, URL>> queuedJars;
     
     private Map<String, URL> newUrlMap() {
-        return (Map<String, URL>)Maps.newConcurrentMap();
+        return Maps.newConcurrentMap();
     }
     
     public JarCollectorServiceImpl() {

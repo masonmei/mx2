@@ -39,7 +39,7 @@ public class NormalizationServiceImpl extends AbstractService implements Normali
         this.defaultAppName = defaultAgentConfig.getApplicationName();
         this.autoAppNamingEnabled = defaultAgentConfig.isAutoAppNamingEnabled();
         this.defaultUrlNormalizer = this.createUrlNormalizer(this.defaultAppName, NormalizationServiceImpl.EMPTY_RULES);
-        this.defaultTransactionNormalizer = this.createTransactionNormalizer(this.defaultAppName, NormalizationServiceImpl.EMPTY_RULES, Collections.emptyList());
+        this.defaultTransactionNormalizer = this.createTransactionNormalizer(this.defaultAppName, NormalizationServiceImpl.EMPTY_RULES, Collections.<TransactionSegmentTerms>emptyList());
         this.defaultMetricNormalizer = this.createMetricNormalizer(this.defaultAppName, NormalizationServiceImpl.EMPTY_RULES);
         ServiceFactory.getRPMServiceManager().addConnectionListener(this);
     }
@@ -124,7 +124,7 @@ public class NormalizationServiceImpl extends AbstractService implements Normali
         if (normalizer != null) {
             return normalizer;
         }
-        normalizer = this.createTransactionNormalizer(appName, NormalizationServiceImpl.EMPTY_RULES, Collections.emptyList());
+        normalizer = this.createTransactionNormalizer(appName, NormalizationServiceImpl.EMPTY_RULES, Collections.<TransactionSegmentTerms>emptyList());
         final Normalizer oldNormalizer = this.transactionNormalizers.putIfAbsent(appName, normalizer);
         return (oldNormalizer == null) ? normalizer : oldNormalizer;
     }

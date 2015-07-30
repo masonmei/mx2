@@ -14,6 +14,6 @@ class HigherPriorityTransactionNamingPolicy extends TransactionNamingPolicy
             return false;
         }
         final PriorityTransactionName ptn = tx.getPriorityTransactionName();
-        return priority.compareTo((Enum)ptn.getPriority()) > 0;
+        return priority.compareTo(ptn.getPriority()) > 0;
     }
 }

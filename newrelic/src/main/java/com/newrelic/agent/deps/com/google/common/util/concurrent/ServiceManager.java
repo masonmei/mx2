@@ -56,7 +56,7 @@ public final class ServiceManager
         ImmutableList<Service> copy = ImmutableList.copyOf(services);
         if (copy.isEmpty()) {
             ServiceManager.logger.log(Level.WARNING, "ServiceManager configured with no services.  Is your application configured properly?", new EmptyServiceManagerWarning());
-            copy = (ImmutableList<Service>)ImmutableList.of(new NoOpService());
+            copy = ImmutableList.<Service>of(new NoOpService());
         }
         this.state = new ServiceManagerState(copy);
         this.services = copy;
@@ -138,7 +138,7 @@ public final class ServiceManager
     
     @Override
     public String toString() {
-        return MoreObjects.toStringHelper(ServiceManager.class).add("services", Collections2.filter(this.services, (Predicate<? super Service>)Predicates.not((Predicate<? super E>)Predicates.instanceOf(NoOpService.class)))).toString();
+        return MoreObjects.toStringHelper(ServiceManager.class).add("services", Collections2.filter(this.services, Predicates.not(Predicates.instanceOf(NoOpService.class)))).toString();
     }
     
     static {
@@ -195,11 +195,11 @@ public final class ServiceManager
             this.servicesByState = Multimaps.newSetMultimap(new EnumMap<Service.State, Collection<Service>>(Service.State.class), new Supplier<Set<Service>>() {
                 @Override
                 public Set<Service> get() {
-                    return (Set<Service>)Sets.newLinkedHashSet();
+                    return Sets.<Service>newLinkedHashSet();
                 }
             });
             this.states = this.servicesByState.keys();
-            this.startupTimers = (Map<Service, Stopwatch>)Maps.newIdentityHashMap();
+            this.startupTimers = Maps.newIdentityHashMap();
             this.awaitHealthGuard = new Monitor.Guard(this.monitor) {
                 @Override
                 public boolean isSatisfied() {
@@ -214,7 +214,7 @@ public final class ServiceManager
             };
             this.listeners = Collections.synchronizedList(new ArrayList<ListenerCallQueue<Listener>>());
             this.numberOfServices = services.size();
-            this.servicesByState.putAll(Service.State.NEW, (Iterable<?>)services);
+            this.servicesByState.putAll(Service.State.NEW, services);
         }
         
         void tryStartTiming(final Service service) {
@@ -234,7 +234,7 @@ public final class ServiceManager
             this.monitor.enter();
             try {
                 if (this.transitioned) {
-                    final List<Service> servicesInBadStates = (List<Service>)Lists.newArrayList();
+                    final List<Service> servicesInBadStates = Lists.newArrayList();
                     for (final Service service : this.servicesByState().values()) {
                         if (service.state() != Service.State.NEW) {
                             servicesInBadStates.add(service);
@@ -300,7 +300,8 @@ public final class ServiceManager
             try {
                 if (!this.monitor.waitForUninterruptibly(this.stoppedGuard, timeout, unit)) {
                     final String value = String.valueOf(String.valueOf("Timeout waiting for the services to stop. The following services have not stopped: "));
-                    final String value2 = String.valueOf(String.valueOf(Multimaps.filterKeys(this.servicesByState, (Predicate<? super Service.State>)Predicates.not(Predicates.in((Collection<? extends K>)ImmutableSet.of(Service.State.TERMINATED, Service.State.FAILED))))));
+                    final String value2 = String.valueOf(String.valueOf(Multimaps.filterKeys(this.servicesByState, Predicates.not(Predicates.in(ImmutableSet
+                            .of(Service.State.TERMINATED, Service.State.FAILED))))));
                     throw new TimeoutException(new StringBuilder(0 + value.length() + value2.length()).append(value).append(value2).toString());
                 }
             }
@@ -329,7 +330,7 @@ public final class ServiceManager
             this.monitor.enter();
             List<Map.Entry<Service, Long>> loadTimes;
             try {
-                loadTimes = (List<Map.Entry<Service, Long>>)Lists.newArrayListWithCapacity(this.startupTimers.size());
+                loadTimes = Lists.newArrayListWithCapacity(this.startupTimers.size());
                 for (final Map.Entry<Service, Stopwatch> entry : this.startupTimers.entrySet()) {
                     final Service service = entry.getKey();
                     final Stopwatch stopWatch = entry.getValue();
@@ -341,7 +342,7 @@ public final class ServiceManager
             finally {
                 this.monitor.leave();
             }
-            Collections.sort(loadTimes, Ordering.natural().onResultOf((Function<Object, ? extends Comparable>)new Function<Map.Entry<Service, Long>, Long>() {
+            Collections.sort(loadTimes, Ordering.natural().onResultOf(new Function<Map.Entry<Service, Long>, Long>() {
                 @Override
                 public Long apply(final Map.Entry<Service, Long> input) {
                     return input.getValue();
@@ -423,7 +424,7 @@ public final class ServiceManager
         @GuardedBy("monitor")
         void checkHealthy() {
             if (this.states.count(Service.State.RUNNING) != this.numberOfServices) {
-                final String value = String.valueOf(String.valueOf(Multimaps.filterKeys(this.servicesByState, (Predicate<? super Service.State>)Predicates.not((Predicate<? super K>)Predicates.equalTo((T)Service.State.RUNNING)))));
+                final String value = String.valueOf(String.valueOf(Multimaps.filterKeys(this.servicesByState, Predicates.not(Predicates.equalTo(Service.State.RUNNING)))));
                 final IllegalStateException exception = new IllegalStateException(new StringBuilder(79 + value.length()).append("Expected to be healthy after starting. The following services are not running: ").append(value).toString());
                 throw exception;
             }
